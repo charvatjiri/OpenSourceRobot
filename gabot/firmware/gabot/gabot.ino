@@ -16,7 +16,10 @@
 #include <RF24.h>
 #include <Servo.h>
 #include<avr/wdt.h> 
- 
+
+#include "Radio.h"
+
+
 //#define CE 9  //UNO
 #define CE 49  //mega
 //#define CS 10
@@ -146,8 +149,8 @@ byte cti;
  bool BUZ_ON;
  bool BUZ_STATE;
  bool BAT_OK;
-  
-RF24 radio(CE, CS);
+
+Radio GabotRadio;
 
 //#define IRQ_PIN 21 // this needs to be a digital input capable pin --- not used
 volatile bool wait_for_event = false; // used to wait for an IRQ event to trigger
@@ -228,21 +231,8 @@ void setup(void) {
     motorH_value = 80;
     motorH.write(motorH_value);
   // initialize the transceiver on the SPI bus
-  if (!radio.begin()) {
-    Serial.println(F("radio hardware is not responding!!"));
-    while (1) {} // hold in infinite loop
-  }
-  //setting speed of communication
-  //options: RF24_250KBPS, RF24_1MBPS, RF24_2MBPS
-  radio.setDataRate(RF24_1MBPS);
-  radio.setPALevel(RF24_PA_MIN);
-  //setting channel
-  radio.setChannel(kanal);
-  // receiver
-  radio.openWritingPipe(prijimac);
-  radio.openReadingPipe(1, vysilac);
-  radio.startListening();
-  //radio.printDetails();
+  GabotRadio.Init();
+ 
 
   // setting power of nRF module,
   // options: RF24_PA_MIN, RF24_PA_LOW, RF24_PA_HIGH and RF24_PA_MAX,
@@ -262,8 +252,8 @@ void setup(void) {
   Serial.print("baterry voltage = ");
   Serial.print(baterry);
   Serial.println(" V");   
-//  radio.maskIRQ(1, 1, 0); // args = "data_sent", "data_fail", "data_ready"
-//    radio.maskIRQ(1, 1, 1); // args = "data_sent", "data_fail", "data_ready"
+//  GabotRadio.m_radio.maskIRQ(1, 1, 0); // args = "data_sent", "data_fail", "data_ready"
+//    GabotRadio.m_radio.maskIRQ(1, 1, 1); // args = "data_sent", "data_fail", "data_ready"
   BUZ_ON = 1;
   buzz_count = 50;
 }
@@ -278,18 +268,14 @@ void loop(void) {
   if(citRadio > 6000){  //time about 0.5 s
     citRadio = 0;  //reset counter for radio watch dog
     //new radio setting (after interference)
-    radio.setChannel(kanal);
-    radio.openWritingPipe(prijimac);
-    radio.openReadingPipe(1, vysilac);
-    radio.startListening();
-    Serial.print("Radio restarted, rad_OK_counter= ");
-    Serial.println(rad_OK_counter);
-    rad_OK_counter = 0;
+    GabotRadio.Restart();
     BUZ_ON = 1; //will be short beep
   }
 
-  while (radio.available()) { //when a signal has been received
-    radio.read( &data, 2);    //two bytes of signal to &data
+  // while (GabotRadio.m_radio.available()) { //when a signal has been received
+  //   GabotRadio.m_radio.read( data, 2);    //two bytes of signal to &data
+  while (GabotRadio.Available()) { //when a signal has been received
+    GabotRadio.Read(data);    //two bytes of signal to &data
     if((data[0] == 0x55)&&(data[1] == 0x55)){ //a special radio watch dog code
       rad_OK_counter++;
       RadioOK = 1;  //a special code has been received
