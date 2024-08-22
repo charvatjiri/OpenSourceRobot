@@ -18,6 +18,7 @@
 #include<avr/wdt.h> 
 
 #include "Radio.h"
+#include "Fingers.h"
 
 
 //#define CE 9  //UNO
@@ -82,8 +83,8 @@ byte cti;
  byte RmotLF = 8;  //Right motor LOW Forward
  byte RmotHF = 46;  //Right motor HIGH Forward
  byte motFPWM = 13;   //PWM
- byte motFR = 18;  //release/grab motor
- byte motFG = 19;  //release/grab motor
+//  byte motFR = 18;  //release/grab motor
+//  byte motFG = 19;  //release/grab motor
  //byte FmotO12 = 22; //Finger motor Open 12V
  //byte FmotC12 = 24; //Finger motor Close 12V
  byte buzzer = A9; //piezo-buzzer without generator 
@@ -139,10 +140,12 @@ byte cti;
  word citRadio;
  bool RadioOK;
  word rad_OK_counter;
- bool grab; //is set after button grab
- bool rls; //is set after button release
+//  bool grab; //is set after button grab
+//  bool rls; //is set after button release
  byte countG; //counter-protection before long grab
  byte countR; //counter-protection before long release
+ Fingers GabotFingers;
+ Fingers FingerMotors;
  unsigned long time_now; //timer 100 ms
  float baterry;  //baterry voltage
  word buzz_count;  //
@@ -169,6 +172,7 @@ volatile byte pokus;
 //void interruptHandler(); // prototype to handle IRQ events
 
 void setup(void) {
+
   Serial.begin(115200);
   Serial.println("RESET");  
   wdt_enable(WDTO_120MS);
@@ -194,16 +198,16 @@ void setup(void) {
    digitalWrite(motHU, LOW);
    pinMode(motHD, OUTPUT);
    digitalWrite(motHD, LOW);
-   pinMode(motFG, OUTPUT);
-   digitalWrite(motFG, HIGH);
-   pinMode(motFR, OUTPUT);
-   digitalWrite(motFR, HIGH);
+  //  pinMode(motFG, OUTPUT);
+  //  digitalWrite(motFG, HIGH);
+  //  pinMode(motFR, OUTPUT);
+  //  digitalWrite(motFR, HIGH);
    pinMode(motFPWM, OUTPUT);
 //   pinMode(IRQ_PIN, INPUT);
    pinMode(button, INPUT);
    pinMode(buzzer, OUTPUT);
-    grab = HIGH;
-    rls = HIGH;
+    // grab = HIGH;
+    // rls = HIGH;
     countR = 0;
     countG = 0;   
     dir_forw = 0;
@@ -233,7 +237,6 @@ void setup(void) {
   // initialize the transceiver on the SPI bus
   GabotRadio.Init();
  
-
   // setting power of nRF module,
   // options: RF24_PA_MIN, RF24_PA_LOW, RF24_PA_HIGH and RF24_PA_MAX,
   // external power 3.3V is need for HIGH and MAX 
@@ -594,17 +597,20 @@ void loop(void) {
     EL[9] = 0;
   }
   if(EL[10] == HIGH){ //
-    EL[10] = 0;         
-    rls = HIGH; //release OFF
-    grab = data[1]; //grab ON/OFF
+    EL[10] = 0;
+    GabotFingers.DoGrab(data[1]);
+    // rls = HIGH; //release OFF
+    // grab = data[1]; //grab ON/OFF
   }
   if(EL[11] == HIGH){ //release
-    EL[11] = 0;      
-    grab = HIGH; //grab OFF
-    rls = data[1]; //release ON/OFF
+    EL[11] = 0;
+    GabotFingers.DoRelease(data[1]);      
+    // grab = HIGH; //grab OFF
+    // rls = data[1]; //release ON/OFF
   }
-  digitalWrite(motFG, grab); //wanted condition on output
-  digitalWrite(motFR, rls); //wanted condition on output
+  //digitalWrite(motFG, grab); //wanted condition on output
+  //digitalWrite(motFR, rls); //wanted condition on output
+  GabotFingers.FingerMotors();
 
   if(BUZ_ON || !BAT_OK){
 //  if(BUZ_ON){    
@@ -622,26 +628,26 @@ void loop(void) {
   if(millis() - time_now > 100){  //every second go trough without owerfloat
     time_now = millis();
     //protective of motor grab/release before long run
-    if(rls == LOW){ //if release active = LOW
-      countR++;  //every 100ms inc counter      
-    }
-    else{
-      countR = 0;  //if release not active
-    }
-    if(countR > 33){  //max time of release 3.3 s
-      rls = HIGH;
-      countR = 0;
-    }
-    //similary for grab  
-    if(grab == LOW){
-      countG++;        
-    }
-    else{
-      countG = 0;
-    }
-    if(countG > 33){  //max time of grab 3.3 s
-      grab = HIGH;
-      countG = 0;
-    }
+    // if(rls == LOW){ //if release active = LOW
+    //   countR++;  //every 100ms inc counter      
+    // }
+    // else{
+    //   countR = 0;  //if release not active
+    // }
+    // if(countR > 33){  //max time of release 3.3 s
+    //   rls = HIGH;
+    //   countR = 0;
+    // }
+    // //similary for grab  
+    // if(grab == LOW){
+    //   countG++;        
+    // }
+    // else{
+    //   countG = 0;
+    // }
+    // if(countG > 33){  //max time of grab 3.3 s
+    //   grab = HIGH;
+    //   countG = 0;
+    // }
   }  
 }      
