@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Arduino Mega 2560 (CH340 chip) -->
+    <usb-device vendor-id="6790" product-id="29987" />
+    <!-- Arduino Mega 2560 (ATmega16U2 chip - original Arduino) -->
+    <usb-device vendor-id="9025" product-id="66" />
+    <!-- Arduino Mega 2560 R3 -->
+    <usb-device vendor-id="9025" product-id="67" />
+    <!-- Generic FTDI -->
+    <usb-device vendor-id="1027" product-id="24577" />
+    <!-- CP210x -->
+    <usb-device vendor-id="4292" product-id="60000" />
+    <!-- Prolific PL2303 -->
+    <usb-device vendor-id="1659" product-id="8963" />
+</resources>
