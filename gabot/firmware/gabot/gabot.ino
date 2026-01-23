@@ -19,10 +19,11 @@
 
 #include "Radio.h"
 #include "Fingers.h"
+#include "SerialCommand.h"
 
 #define VER_MAJOR 0
 #define VER_MINOR 0
-#define VER_MICRO 2
+#define VER_MICRO 3
 
 //#define CE 9  //UNO
 #define CE 49  //mega
@@ -150,7 +151,6 @@ byte cti;
  Fingers GabotFingers;
  Fingers FingerMotors;
  unsigned long time_now; //timer 100 ms
- String serialCommand = ""; // buffer for incoming serial commands
  float baterry;  //baterry voltage
  word buzz_count;  //
  bool BUZ_ON;
@@ -158,6 +158,7 @@ byte cti;
  bool BAT_OK;
 
 Radio GabotRadio;
+SerialCommand GabotSerial(GabotFingers, VER_MAJOR, VER_MINOR, VER_MICRO);
 
 //#define IRQ_PIN 21 // this needs to be a digital input capable pin --- not used
 volatile bool wait_for_event = false; // used to wait for an IRQ event to trigger
@@ -174,26 +175,6 @@ int kanal = 120;
 volatile byte pokus;
 
 //void interruptHandler(); // prototype to handle IRQ events
-
-void processSerialCommand(String cmd) {
-  cmd.trim();
-  
-  if (cmd == "get version") {
-    Serial.print(VER_MAJOR);
-    Serial.print(".");
-    Serial.print(VER_MINOR);
-    Serial.print(".");
-    Serial.println(VER_MICRO);
-  }
-  else if (cmd.startsWith("grab ")) {
-    String numStr = cmd.substring(5);
-    numStr.trim();
-    int value = numStr.toInt();
-    if (value >= 0 && value <= 255) {
-      GabotFingers.DoGrab((byte)value);
-    }
-  }
-}
 
 void setup(void) {
 
@@ -286,18 +267,7 @@ void setup(void) {
 }
 
 void loop(void) {
-  // Process serial commands from USB
-  while (Serial.available()) {
-    char c = Serial.read();
-    if (c == '\n' || c == '\r') {
-      if (serialCommand.length() > 0) {
-        processSerialCommand(serialCommand);
-        serialCommand = "";
-      }
-    } else {
-      serialCommand += c;
-    }
-  }
+  GabotSerial.Process();
 
   if(RadioOK == 1){  //a special code has been received
     citRadio = 0;  //reset counter for radio watch dog
