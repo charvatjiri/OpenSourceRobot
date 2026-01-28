@@ -14,6 +14,13 @@ SerialCommand::~SerialCommand()
 {
 }
 
+void SerialCommand::setMotors(Servo& f, Servo& c, Servo& h)
+{   
+    m_motorF = f;
+    m_motorC = c;
+    m_motorH = h;
+}
+
 void SerialCommand::Process()
 {
     while (Serial.available()) {
@@ -39,6 +46,17 @@ void SerialCommand::processCommand(String cmd)
     else if (cmd.startsWith("grab ")) {
         cmdGrab(cmd.substring(5));
     }
+    else if (cmd.startsWith("motor ")) {
+        String motor = cmd.substring(7,7);
+        int position = cmd.substring(9).toInt();
+        if (motor == "f") {
+            cmdMotorPos(m_motorF, position);
+        } else if (motor == "c") {
+            cmdMotorPos(m_motorC, position);
+        } else if (motor == "h") {
+            cmdMotorPos(m_motorH, position);
+        }
+     }
 }
 
 void SerialCommand::cmdGetVersion()
@@ -57,4 +75,9 @@ void SerialCommand::cmdGrab(String args)
     if (value >= 0 && value <= 255) {
         m_fingers.DoGrab((byte)value);
     }
+}
+
+void SerialCommand::cmdMotorPos(Servo& motor, int position)
+{
+    motor.write(position);
 }

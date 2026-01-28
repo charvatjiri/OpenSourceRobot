@@ -23,7 +23,7 @@
 
 #define VER_MAJOR 0
 #define VER_MINOR 0
-#define VER_MICRO 3
+#define VER_MICRO 4
 
 //#define CE 9  //UNO
 #define CE 49  //mega
@@ -160,6 +160,7 @@ byte cti;
 Radio GabotRadio;
 SerialCommand GabotSerial(GabotFingers, VER_MAJOR, VER_MINOR, VER_MICRO);
 
+
 //#define IRQ_PIN 21 // this needs to be a digital input capable pin --- not used
 volatile bool wait_for_event = false; // used to wait for an IRQ event to trigger
 volatile char data[2];
@@ -241,7 +242,8 @@ void setup(void) {
     motorH.write(motorH_value);
   // initialize the transceiver on the SPI bus
   GabotRadio.Init();
- 
+  GabotSerial.setMotors(motorF, motorC, motorH);
+
   // setting power of nRF module,
   // options: RF24_PA_MIN, RF24_PA_LOW, RF24_PA_HIGH and RF24_PA_MAX,
   // external power 3.3V is need for HIGH and MAX 
