@@ -25,9 +25,9 @@ private:
     void cmdMotorPos(Servo& motor, int position);
 
     Fingers& m_fingers;
-    Servo& m_motorF;
-    Servo& m_motorC;
-    Servo& m_motorH;
+    Servo* m_motorF;
+    Servo* m_motorC;
+    Servo* m_motorH;
     String m_buffer;
     int m_verMajor;
     int m_verMinor;

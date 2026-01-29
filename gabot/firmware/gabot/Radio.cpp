@@ -20,7 +20,8 @@ void Radio::Init()
 {
   if (!m_radio.begin()) {
   Serial.println(F("radio hardware is not responding!!"));
-    while (1) {} // hold in infinite loop
+    //while (1) {} // hold in infinite loop
+    return;
   }
   //setting speed of communication
   //options: RF24_250KBPS, RF24_1MBPS, RF24_2MBPS
