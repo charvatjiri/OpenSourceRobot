@@ -22,6 +22,7 @@ private:
     void processCommand(String cmd);
     void cmdGetVersion();
     void cmdGrab(String args);
+    void cmdRelease(String args);
     void cmdMotorPos(Servo& motor, int position);
 
     Fingers& m_fingers;

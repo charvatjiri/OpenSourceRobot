@@ -57,6 +57,9 @@ void SerialCommand::processCommand(String cmd)
     else if (cmd.startsWith("grab ") || cmd.startsWith("GRAB ")) {
         cmdGrab(cmd.substring(5));
     }
+    else if (cmd.startsWith("release ") || cmd.startsWith("RELEASE ")) {
+        cmdRelease(cmd.substring(7));
+    }
     else if (cmd.startsWith("motor ") || cmd.startsWith("MOTOR ")) {
         String motor = cmd.substring(6, 7);
         motor.toLowerCase();
@@ -93,6 +96,19 @@ void SerialCommand::cmdGrab(String args)
     if (value >= 0 && value <= 255) {
         m_fingers.DoGrab((byte)value);
         Serial.print("OK grab ");
+        Serial.println(value);
+    } else {
+        Serial.println("ERR: grab value out of range");
+    }
+}
+
+void SerialCommand::cmdRelease(String args)
+{
+    args.trim();
+    int value = args.toInt();
+    if (value >= 0 && value <= 255) {
+        m_fingers.DoRelease((byte)value);
+        Serial.print("OK release ");
         Serial.println(value);
     } else {
         Serial.println("ERR: grab value out of range");

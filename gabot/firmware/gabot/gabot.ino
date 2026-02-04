@@ -33,9 +33,9 @@
 //MISO = 12 mega50
 //SCK = 13 mega52
 //VCC = 3,3V!
-Servo motorF;
-Servo motorC;
-Servo motorH;
+Servo motorF; // ? fingers?
+Servo motorC; // wrist Right-Left Rotate 0-360 angle degree
+Servo motorH; // wrist Up-Down 0-180 angle degree
 
 byte cti;
 //definition input pins
