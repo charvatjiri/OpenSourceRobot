@@ -17,11 +17,13 @@ SerialCommand::~SerialCommand()
 {
 }
 
-void SerialCommand::setMotors(Servo& f, Servo& c, Servo& h)
+void SerialCommand::setMotors(Servo& f, Servo& c, Servo& h, byte* valueC, byte* valueH)
 {   
     m_motorF = &f;
     m_motorC = &c;
     m_motorH = &h;
+    m_motorC_value = valueC;
+    m_motorH_value = valueH;
 }
 
 int SerialCommand::Process()
@@ -72,11 +74,11 @@ int SerialCommand::processCommand(String cmd)
         Serial.print(motor);
         Serial.println(":");
         if (motor == "f" && m_motorF) {
-            returnVal = cmdMotorPos(*m_motorF, position);
+            returnVal = cmdMotorPos(*m_motorF, nullptr, position);
         } else if (motor == "c" && m_motorC) {
-            returnVal = cmdMotorPos(*m_motorC, position);
+            returnVal = cmdMotorPos(*m_motorC, m_motorC_value, position);
         } else if (motor == "h" && m_motorH) {
-            returnVal = cmdMotorPos(*m_motorH, position);
+            returnVal = cmdMotorPos(*m_motorH, m_motorH_value, position);
         } else {
             Serial.println("ERR: unknown motor");
         }
@@ -128,9 +130,12 @@ int SerialCommand::cmdRelease(String args)
     }
 }
 
-int SerialCommand::cmdMotorPos(Servo& motor, int position)
+int SerialCommand::cmdMotorPos(Servo& motor, byte* valuePtr, int position)
 {
     motor.write(position);
+    if (valuePtr != nullptr) {
+        *valuePtr = (byte)position;
+    }
     Serial.print("OK motor ");
     Serial.println(position);
     return SerialCmd_Success;

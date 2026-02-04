@@ -16,14 +16,18 @@
 #include <RF24.h>
 #include <Servo.h>
 #include <avr/wdt.h>
+#include <Wire.h>
 
 #include "Radio.h"
 #include "Fingers.h"
 #include "SerialCommand.h"
+#include "AngleSensor.h"
+#include "OvercurrentProtection.h"
+#include "BatteryMonitor.h"
 
-#define VER_MAJOR 0
-#define VER_MINOR 0
-#define VER_MICRO 4
+#define VER_MAJOR 3
+#define VER_MINOR 1
+#define VER_MICRO 0
 
 //#define CE 9  //UNO
 #define CE 49  //mega
@@ -160,6 +164,20 @@ bool BAT_OK;
 Radio GabotRadio;
 SerialCommand GabotSerial(GabotFingers, VER_MAJOR, VER_MINOR, VER_MICRO);
 
+// New modules from GABOT23
+AngleSensor GabotAngle;
+OvercurrentProtection GabotOvercurrent;
+BatteryMonitor GabotBattery;
+
+// Current sensor pins (from GABOT23)
+#define CURRENT_PIN_L A6
+#define CURRENT_PIN_R A3
+#define CURRENT_PIN_UD A5
+#define CURRENT_PIN_WE A4
+#define CURRENT_PIN_F A1
+#define VOLTAGE_PIN A0
+#define BUZZER_PIN A9
+
 
 //#define IRQ_PIN 21 // this needs to be a digital input capable pin --- not used
 volatile bool wait_for_event = false;  // used to wait for an IRQ event to trigger
@@ -242,7 +260,13 @@ void setup(void) {
   motorH.write(motorH_value);
   // initialize the transceiver on the SPI bus
   GabotRadio.Init();
-  GabotSerial.setMotors(motorF, motorC, motorH);
+  GabotSerial.setMotors(motorF, motorC, motorH, &motorC_value, &motorH_value);
+
+  // Initialize new modules from GABOT23
+  GabotAngle.Init(4);  // direction pin
+  GabotOvercurrent.Init(CURRENT_PIN_L, CURRENT_PIN_R, CURRENT_PIN_UD, CURRENT_PIN_WE);
+  GabotBattery.Init(VOLTAGE_PIN, BUZZER_PIN);
+  GabotFingers.Init(CURRENT_PIN_F);
 
   // setting power of nRF module,
   // options: RF24_PA_MIN, RF24_PA_LOW, RF24_PA_HIGH and RF24_PA_MAX,
@@ -440,37 +464,37 @@ void loop(void) {
   cti++;  //delay for print
   wdt_reset();
 
-  // return Wrist servos to some base position - commented out
-  // if (EL[0] == HIGH) {
-  // }
-  // if (millis() > timeC) {
-  //   timeC = millis() + (138 - abs(element[0]));
-  //   if ((element[0] > 0) && (motorC_value < 166)) {
-  //     motorC_value++;
-  //   }
-  //   if ((element[0] < 0) && (motorC_value > 0)) {
-  //     motorC_value--;
-  //   }
-  //   motorC.write(motorC_value);
-  // }
-  // if (EL[1] == HIGH) {  //
-  //   EL[1] = 0;
-  // }
-  // wdt_reset();
+  // Wrist servo C (Right-Left Rotate) - radio element[0]
+  if (EL[0] == HIGH) {
+    EL[0] = 0;
+  }
+  if (millis() > timeC) {
+    timeC = millis() + (138 - abs(element[0]));
+    if ((element[0] > 0) && (motorC_value < 166)) {
+      motorC_value++;
+    }
+    if ((element[0] < 0) && (motorC_value > 0)) {
+      motorC_value--;
+    }
+    motorC.write(motorC_value);
+  }
+  wdt_reset();
 
-  // if (millis() > timeH) {
-  //   timeH = millis() + (138 - abs(element[1]));
-  //   if ((element[1] > 0) && (motorH_value < 166)) {
-  //     motorH_value++;
-  //     //      Serial.println(motorH_value);
-  //   }
-  //   if ((element[1] < 0) && (motorH_value > 0)) {
-  //     motorH_value--;
-  //     //      Serial.println(motorH_value);
-  //   }
-  //   motorH.write(motorH_value);
-  // }
-  // wdt_reset();
+  // Wrist servo H (Up-Down) - radio element[1]
+  if (EL[1] == HIGH) {
+    EL[1] = 0;
+  }
+  if (millis() > timeH) {
+    timeH = millis() + (138 - abs(element[1]));
+    if ((element[1] > 0) && (motorH_value < 166)) {
+      motorH_value++;
+    }
+    if ((element[1] < 0) && (motorH_value > 0)) {
+      motorH_value--;
+    }
+    motorH.write(motorH_value);
+  }
+  wdt_reset();
 
   if (EL[2] == HIGH) {  //
     EL[2] = 0;
@@ -505,13 +529,14 @@ void loop(void) {
   }
   wdt_reset();
 
-  if ((countA * 15) > 190) {
+  // Angle limit protection using AS5600 sensor (GABOT23 feature)
+  if (GabotAngle.IsAtEastLimit() || GabotOvercurrent.IsWEStopped()) {
     analogWrite(motLE, 0);
     digitalWrite(motHE, 0);
     dir_forw = 0;
     dir_forwH = 0;
   }
-  if ((countA * 15) < -190) {
+  if (GabotAngle.IsAtWestLimit() || GabotOvercurrent.IsWEStopped()) {
     analogWrite(motLW, 0);
     digitalWrite(motHW, 0);
     dir_back = 0;
@@ -541,10 +566,18 @@ void loop(void) {
       dir_backH = 0;
       part3 = element[3] * 2;
     }
-    digitalWrite(motHU, dir_forwH);
-    analogWrite(motLU, part3 * dir_forw);
-    digitalWrite(motHD, dir_backH);
-    analogWrite(motLD, part3 * dir_back);
+    // UD motor with overcurrent protection (GABOT23 feature)
+    if (!GabotOvercurrent.IsUDStopped()) {
+      digitalWrite(motHU, dir_forwH);
+      analogWrite(motLU, part3 * dir_forw);
+      digitalWrite(motHD, dir_backH);
+      analogWrite(motLD, part3 * dir_back);
+    } else {
+      digitalWrite(motHU, 0);
+      analogWrite(motLU, 0);
+      digitalWrite(motHD, 0);
+      analogWrite(motLD, 0);
+    }
   }
   wdt_reset();
 
@@ -616,15 +649,30 @@ void loop(void) {
   }
   wdt_reset();
   
-  //left & right motor
-  digitalWrite(RmotHF, Rdir_forwH);
-  analogWrite(RmotLF, abs(v - h) * Rdir_forw);  //transfer values from joystick to motors
-  digitalWrite(RmotHB, Rdir_backH);
-  analogWrite(RmotLB, abs(v - h) * Rdir_back);  //transfer values from joystick to motors
-  digitalWrite(LmotHF, Ldir_forwH);
-  analogWrite(LmotLF, abs(v + h) * Ldir_forw);  //transfer values from joystick to motors
-  digitalWrite(LmotHB, Ldir_backH);
-  analogWrite(LmotLB, abs(v + h) * Ldir_back);  //transfer values from joystick to motors
+  //left & right motor with overcurrent protection (GABOT23 feature)
+  if (GabotOvercurrent.IsLeftStopped()) {
+    digitalWrite(LmotHF, 0);
+    analogWrite(LmotLF, 0);
+    digitalWrite(LmotHB, 0);
+    analogWrite(LmotLB, 0);
+  } else {
+    digitalWrite(LmotHF, Ldir_forwH);
+    analogWrite(LmotLF, abs(v + h) * Ldir_forw);
+    digitalWrite(LmotHB, Ldir_backH);
+    analogWrite(LmotLB, abs(v + h) * Ldir_back);
+  }
+
+  if (GabotOvercurrent.IsRightStopped()) {
+    digitalWrite(RmotHF, 0);
+    analogWrite(RmotLF, 0);
+    digitalWrite(RmotHB, 0);
+    analogWrite(RmotLB, 0);
+  } else {
+    digitalWrite(RmotHF, Rdir_forwH);
+    analogWrite(RmotLF, abs(v - h) * Rdir_forw);
+    digitalWrite(RmotHB, Rdir_backH);
+    analogWrite(RmotLB, abs(v - h) * Rdir_back);
+  }
   if (EL[7] == HIGH) {                          //
     EL[7] = 0;
   }
@@ -664,30 +712,20 @@ void loop(void) {
     }
   }
 
-  //TIMERS
-  if (millis() - time_now > 100) {  //every second go trough without owerfloat
+  //TIMERS - every 100ms updates (GABOT23 features)
+  if (millis() - time_now > 100) {
     time_now = millis();
-    //protective of motor grab/release before long run
-    // if(rls == LOW){ //if release active = LOW
-    //   countR++;  //every 100ms inc counter
-    // }
-    // else{
-    //   countR = 0;  //if release not active
-    // }
-    // if(countR > 33){  //max time of release 3.3 s
-    //   rls = HIGH;
-    //   countR = 0;
-    // }
-    // //similary for grab
-    // if(grab == LOW){
-    //   countG++;
-    // }
-    // else{
-    //   countG = 0;
-    // }
-    // if(countG > 33){  //max time of grab 3.3 s
-    //   grab = HIGH;
-    //   countG = 0;
-    // }
+
+    // Read angle from AS5600 sensor
+    GabotAngle.ReadAngle();
+
+    // Update overcurrent protection
+    GabotOvercurrent.Update();
+
+    // Update battery monitor
+    GabotBattery.Update();
+
+    // Update finger timeout and current protection
+    GabotFingers.Update();
   }
 }

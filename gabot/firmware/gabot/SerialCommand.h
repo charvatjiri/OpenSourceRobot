@@ -19,7 +19,7 @@ public:
     SerialCommand(Fingers& fingers, int verMajor, int verMinor, int verMicro);
     ~SerialCommand();
 
-    void setMotors(Servo& f, Servo& c, Servo& h);
+    void setMotors(Servo& f, Servo& c, Servo& h, byte* valueC, byte* valueH);
 
     int Process();
 
@@ -29,12 +29,14 @@ private:
     int cmdGetVersion();
     int cmdGrab(String args);
     int cmdRelease(String args);
-    int cmdMotorPos(Servo& motor, int position);
+    int cmdMotorPos(Servo& motor, byte* valuePtr, int position);
 
     Fingers& m_fingers;
     Servo* m_motorF;
     Servo* m_motorC;
     Servo* m_motorH;
+    byte* m_motorC_value;
+    byte* m_motorH_value;
     String m_buffer;
     int m_verMajor;
     int m_verMinor;
