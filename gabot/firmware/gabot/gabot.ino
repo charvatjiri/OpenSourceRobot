@@ -290,157 +290,157 @@ void loop(void) {
   //   Serial.println();
   // }
   
-  GabotSerial.Process();
+  if (GabotSerial.Process() == SerialCmd_Success)
+    return;
 
-  // if (RadioOK == 1) {  //a special code has been received
-  //   citRadio = 0;      //reset counter for radio watch dog
-  // }
-  // RadioOK = 0;            //will be set after a special code
-  // citRadio++;             //radio watch dog timer
-  //                         //  if(citRadio > 3000){  //time about 1 s
-  // if (citRadio > 6000) {  //time about 0.5 s
-  //   citRadio = 0;         //reset counter for radio watch dog
-  //   //new radio setting (after interference)
-  //   GabotRadio.Restart();
-  //   BUZ_ON = 1;  //will be short beep
-  // }
+  if (RadioOK == 1) {  //a special code has been received
+    citRadio = 0;      //reset counter for radio watch dog
+  }
+  RadioOK = 0;            //will be set after a special code
+  citRadio++;             //radio watch dog timer
+                          //  if(citRadio > 3000){  //time about 1 s
+  if (citRadio > 6000) {  //time about 0.5 s
+    citRadio = 0;         //reset counter for radio watch dog
+    //new radio setting (after interference)
+    GabotRadio.Restart();
+    BUZ_ON = 1;  //will be short beep
+  }
 
-  // while (GabotRadio.m_radio.available()) { //when a signal has been received
-  //   GabotRadio.m_radio.read( data, 2);    //two bytes of signal to &data
-  // while (GabotRadio.Available()) {                 //when a signal has been received
-  //   wdt_reset();
-  //   GabotRadio.Read(data);                         //two bytes of signal to &data
-  //   if ((data[0] == 0x55) && (data[1] == 0x55)) {  //a special radio watch dog code
-  //     rad_OK_counter++;
-  //     RadioOK = 1;  //a special code has been received
-  //   } else {
-  //     /*      Serial.println(" ");
-  //     Serial.print("    data ");
-  //     Serial.print(data[0], DEC);
-  //     Serial.print(": ");
-  //     Serial.print(data[1], DEC);*/
-  //     data[0] = data[0] & 0x0F;    //which element
-  //     EL[data[0]] = HIGH;          //element will be changed
-  //     element[data[0]] = data[1];  // new value of element
-  //   }
-  // }
-  // wdt_reset();
+  while (GabotRadio.Available()) {                 //when a signal has been received
+    wdt_reset();
+    GabotRadio.Read(data);                         //two bytes of signal to &data
+    if ((data[0] == 0x55) && (data[1] == 0x55)) {  //a special radio watch dog code
+      rad_OK_counter++;
+      RadioOK = 1;  //a special code has been received
+    } else {
+      /*      Serial.println(" ");
+      Serial.print("    data ");
+      Serial.print(data[0], DEC);
+      Serial.print(": ");
+      Serial.print(data[1], DEC);*/
+      data[0] = data[0] & 0x0F;    //which element
+      EL[data[0]] = HIGH;          //element will be changed
+      element[data[0]] = data[1];  // new value of element
+    }
+  }
+  wdt_reset();
 
-  // while (digitalRead(button) == 0) {
-  //   //when button is pressed, program stopped and RESET by WD
-  //   //i++;
-  //   //Serial.println(i);
-  // }
-  // wdt_reset();
+  while (digitalRead(button) == 0) {
+    //when button is pressed, program stopped and RESET by WD
+    //i++;
+    //Serial.println(i);
+  }
+  wdt_reset();
 
-  // sensor_short = analogRead(fotodiodeA);
-  // sensor_long = analogRead(fotodiodeZ);
-  // wdt_reset();
+  sensor_short = analogRead(fotodiodeA);
+  sensor_long = analogRead(fotodiodeZ);
+  wdt_reset();
 
-  // //value of fotosensors are from 0 to 60
-  // //the 360° disc has 24 A holes and 4 different Z holes
-  // cti = 0;  //counter delay for print
-  // if ((holeA == 0) && (sensor_short > 30)) {
-  //   holeA = 1;
-  //   //    digitalWrite(osc, 1);
-  //   countA = countA + last_dir;  //countA counter A holes
-  //   if (cti == 0) {
-  //     Serial.print(" angleA =");
-  //     Serial.println((countA * 15));
-  //     //    Serial.print(" holeA =");
-  //     //    Serial.println(holeA);
-  //     //    Serial.print(" countA =");
-  //     //    Serial.println(countA);
-  //   }
-  //   if (countZ) {                  //countering A holes during Z hole
-  //     countZ = countZ + last_dir;  //relative
-  //     countZA++;                   //absolute
-  //     if (cti == 0) {
-  //       //      Serial.print(" countZ =");
-  //       //      Serial.println(countZ);
-  //     }
-  //   }
-  // }
-  // wdt_reset();
+  //value of fotosensors are from 0 to 60
+  //the 360° disc has 24 A holes and 4 different Z holes
+  cti = 0;  //counter delay for print
+  if ((holeA == 0) && (sensor_short > 30)) {
+    holeA = 1;
+    //    digitalWrite(osc, 1);
+    countA = countA + last_dir;  //countA counter A holes
+    if (cti == 0) {
+      Serial.print(" angleA =");
+      Serial.println((countA * 15));
+      //    Serial.print(" holeA =");
+      //    Serial.println(holeA);
+      //    Serial.print(" countA =");
+      //    Serial.println(countA);
+    }
+    if (countZ) {                  //countering A holes during Z hole
+      countZ = countZ + last_dir;  //relative
+      countZA++;                   //absolute
+      if (cti == 0) {
+        //      Serial.print(" countZ =");
+        //      Serial.println(countZ);
+      }
+    }
+  }
+  wdt_reset();
 
-  // if ((holeA == 1) && (sensor_short < 20)) {
-  //   holeA = 0;
-  // }
-  // if ((holeZ == 0) && (sensor_long > 30)) {
-  //   holeZA = 1;
-  //   holeZ = 1;
-  //   countZ = countZ + last_dir;
-  //   countZA = 1;
-  //   if (cti == 0) {
-  //   }
-  // }
-  // wdt_reset();
-  // if ((holeZ == 1) && (sensor_long < 20)) {  //end of Z hole
-  //                                            /*      Serial.print(" countZA =");
-  //     Serial.print(countZA);
-  //     Serial.print("  countZ =");
-  //     Serial.print(countZ);
-  //     Serial.print("  last_dir =");
-  //     Serial.println(last_dir);*/
+  if ((holeA == 1) && (sensor_short < 20)) {
+    holeA = 0;
+  }
+  if ((holeZ == 0) && (sensor_long > 30)) {
+    holeZA = 1;
+    holeZ = 1;
+    countZ = countZ + last_dir;
+    countZA = 1;
+    if (cti == 0) {
+    }
+  }
+  wdt_reset();
+  if ((holeZ == 1) && (sensor_long < 20)) {  //end of Z hole
+                                             /*      Serial.print(" countZA =");
+      Serial.print(countZA);
+      Serial.print("  countZ =");
+      Serial.print(countZ);
+      Serial.print("  last_dir =");
+      Serial.println(last_dir);*/
 
-  //   //setting the angle according to the Z holes
-  //   if (countZA == abs(countZ)) {  //setting is alowed only when hole Z went in one direction
-  //     if (countZ == 2) {
-  //       angle = 15;
-  //       countA = 1;
-  //       countZA = 1;
-  //     }
-  //     if (countZ == 4) {
-  //       angle = -60;
-  //       countA = -5;
-  //       countZA = -5;
-  //       //        Serial.println(countA);
-  //     }
+    //setting the angle according to the Z holes
+    if (countZA == abs(countZ)) {  //setting is alowed only when hole Z went in one direction
+      if (countZ == 2) {
+        angle = 15;
+        countA = 1;
+        countZA = 1;
+      }
+      if (countZ == 4) {
+        angle = -60;
+        countA = -5;
+        countZA = -5;
+        //        Serial.println(countA);
+      }
 
-  //     if (countZ == 3) {
-  //       angle = 120;
-  //       countA = 8;
-  //       countZA = 8;
-  //     }
-  //   }
-  //   if (last_dir == -1) {
-  //     if (countZ == -2) {
-  //       angle = 0;
-  //       countA = 0;
-  //       countZA = 0;
-  //     }
-  //     if (countZ == -3) {
-  //       angle = 90;
-  //       countA = 6;
-  //       countZA = 6;
-  //     }
-  //     if (countZ == -4) {
-  //       angle = -105;
-  //       countA = -7;
-  //       countZA = -7;
-  //     }
-  //     //the angle is only indicative, the offset of the holes is neglected
-  //     //but angle is (countA * 15)
-  //     //    Serial.print(" angle =");
-  //     //    Serial.println(angle);
-  //   }
-  //   holeZ = 0;
-  // }
-  // if (holeZ == 0) {
-  //   countZA = 0;
-  //   countZ = 0;
-  //   if (cti == 0) {
-  //     //    Serial.print(" holeZ =");
-  //     //    Serial.println(holeZ);
-  //   }
-  // }
-  // /*  if(cti == 0){
-  //     Serial.print(" angle =");
-  //     Serial.println(angle);
-  // }*/
-  // cti++;  //delay for print
-  // wdt_reset();
+      if (countZ == 3) {
+        angle = 120;
+        countA = 8;
+        countZA = 8;
+      }
+    }
+    if (last_dir == -1) {
+      if (countZ == -2) {
+        angle = 0;
+        countA = 0;
+        countZA = 0;
+      }
+      if (countZ == -3) {
+        angle = 90;
+        countA = 6;
+        countZA = 6;
+      }
+      if (countZ == -4) {
+        angle = -105;
+        countA = -7;
+        countZA = -7;
+      }
+      //the angle is only indicative, the offset of the holes is neglected
+      //but angle is (countA * 15)
+      //    Serial.print(" angle =");
+      //    Serial.println(angle);
+    }
+    holeZ = 0;
+  }
+  if (holeZ == 0) {
+    countZA = 0;
+    countZ = 0;
+    if (cti == 0) {
+      //    Serial.print(" holeZ =");
+      //    Serial.println(holeZ);
+    }
+  }
+  /*  if(cti == 0){
+      Serial.print(" angle =");
+      Serial.println(angle);
+  }*/
+  cti++;  //delay for print
+  wdt_reset();
 
+  // return Wrist servos to some base position - commented out
   // if (EL[0] == HIGH) {
   // }
   // if (millis() > timeC) {
@@ -472,222 +472,222 @@ void loop(void) {
   // }
   // wdt_reset();
 
-  // if (EL[2] == HIGH) {  //
-  //   EL[2] = 0;
+  if (EL[2] == HIGH) {  //
+    EL[2] = 0;
 
-  //   if (element[2] < 0) {  //element[2]=arm left/right
-  //     dir_forw = 0;
-  //     dir_back = 1;
-  //     dir_forwH = 0;
-  //     dir_backH = 1;
-  //     //      part3 = element[2] * (-2);
-  //     part3 = element[2] * (-1);  //speed redused by half
-  //     last_dir = -1;
-  //   } else if (element[2] == 0) {
-  //     dir_forw = 0;
-  //     dir_back = 0;
-  //     dir_forwH = 0;
-  //     dir_backH = 0;
-  //     part3 = 0;
-  //   } else {
-  //     dir_forw = 1;
-  //     dir_back = 0;
-  //     dir_forwH = 1;
-  //     dir_backH = 0;
-  //     //part3 = element[2] * 2;
-  //     part3 = element[2];  //speed redused by half
-  //     last_dir = 1;
-  //   }
-  //   digitalWrite(motHE, dir_forwH);
-  //   analogWrite(motLE, part3 * dir_forw);
-  //   digitalWrite(motHW, dir_backH);
-  //   analogWrite(motLW, part3 * dir_back);
-  // }
-  // wdt_reset();
+    if (element[2] < 0) {  //element[2]=arm left/right
+      dir_forw = 0;
+      dir_back = 1;
+      dir_forwH = 0;
+      dir_backH = 1;
+      //      part3 = element[2] * (-2);
+      part3 = element[2] * (-1);  //speed redused by half
+      last_dir = -1;
+    } else if (element[2] == 0) {
+      dir_forw = 0;
+      dir_back = 0;
+      dir_forwH = 0;
+      dir_backH = 0;
+      part3 = 0;
+    } else {
+      dir_forw = 1;
+      dir_back = 0;
+      dir_forwH = 1;
+      dir_backH = 0;
+      //part3 = element[2] * 2;
+      part3 = element[2];  //speed redused by half
+      last_dir = 1;
+    }
+    digitalWrite(motHE, dir_forwH);
+    analogWrite(motLE, part3 * dir_forw);
+    digitalWrite(motHW, dir_backH);
+    analogWrite(motLW, part3 * dir_back);
+  }
+  wdt_reset();
 
-  // if ((countA * 15) > 190) {
-  //   analogWrite(motLE, 0);
-  //   digitalWrite(motHE, 0);
-  //   dir_forw = 0;
-  //   dir_forwH = 0;
-  // }
-  // if ((countA * 15) < -190) {
-  //   analogWrite(motLW, 0);
-  //   digitalWrite(motHW, 0);
-  //   dir_back = 0;
-  //   dir_backH = 0;
-  // }
-  // wdt_reset();
+  if ((countA * 15) > 190) {
+    analogWrite(motLE, 0);
+    digitalWrite(motHE, 0);
+    dir_forw = 0;
+    dir_forwH = 0;
+  }
+  if ((countA * 15) < -190) {
+    analogWrite(motLW, 0);
+    digitalWrite(motHW, 0);
+    dir_back = 0;
+    dir_backH = 0;
+  }
+  wdt_reset();
 
-  // if (EL[3] == HIGH) {
-  //   EL[3] = 0;
+  if (EL[3] == HIGH) {
+    EL[3] = 0;
 
-  //   if (element[3] < 0) {  //element[3]=arm down/up
-  //     dir_forw = 0;
-  //     dir_back = 1;
-  //     dir_forwH = 0;
-  //     dir_backH = 1;
-  //     part3 = element[3] * (-2);
-  //   } else if (element[3] == 0) {
-  //     dir_forw = 0;
-  //     dir_back = 0;
-  //     dir_forwH = 0;
-  //     dir_backH = 0;
-  //     part3 = 0;
-  //   } else {
-  //     dir_forw = 1;
-  //     dir_back = 0;
-  //     dir_forwH = 1;
-  //     dir_backH = 0;
-  //     part3 = element[3] * 2;
-  //   }
-  //   digitalWrite(motHU, dir_forwH);
-  //   analogWrite(motLU, part3 * dir_forw);
-  //   digitalWrite(motHD, dir_backH);
-  //   analogWrite(motLD, part3 * dir_back);
-  // }
-  // wdt_reset();
+    if (element[3] < 0) {  //element[3]=arm down/up
+      dir_forw = 0;
+      dir_back = 1;
+      dir_forwH = 0;
+      dir_backH = 1;
+      part3 = element[3] * (-2);
+    } else if (element[3] == 0) {
+      dir_forw = 0;
+      dir_back = 0;
+      dir_forwH = 0;
+      dir_backH = 0;
+      part3 = 0;
+    } else {
+      dir_forw = 1;
+      dir_back = 0;
+      dir_forwH = 1;
+      dir_backH = 0;
+      part3 = element[3] * 2;
+    }
+    digitalWrite(motHU, dir_forwH);
+    analogWrite(motLU, part3 * dir_forw);
+    digitalWrite(motHD, dir_backH);
+    analogWrite(motLD, part3 * dir_back);
+  }
+  wdt_reset();
 
-  // if (EL[4] == HIGH) {  //+right, - left
-  //   EL[4] = 0;          //now not used
-  // }
-  // if (EL[5] == HIGH) {  //+forward, -back
-  //   EL[5] = 0;          //now not used
-  // }
-  // if (element[4] > slow_h) {  //element[4]=left/right from joystick
-  //   slow_h++;                 //value for motors is changing only for small steps
-  // }
-  // if (element[4] < slow_h) {
-  //   slow_h--;
-  // }
-  // if (element[5] > slow_v) {  //element[5]=forward/back from joystick
-  //   slow_v++;
-  // }
-  // if (element[5] < slow_v) {
-  //   slow_v--;
-  // }
+  if (EL[4] == HIGH) {  //+right, - left
+    EL[4] = 0;          //now not used
+  }
+  if (EL[5] == HIGH) {  //+forward, -back
+    EL[5] = 0;          //now not used
+  }
+  if (element[4] > slow_h) {  //element[4]=left/right from joystick
+    slow_h++;                 //value for motors is changing only for small steps
+  }
+  if (element[4] < slow_h) {
+    slow_h--;
+  }
+  if (element[5] > slow_v) {  //element[5]=forward/back from joystick
+    slow_v++;
+  }
+  if (element[5] < slow_v) {
+    slow_v--;
+  }
 
-  // h_a = abs(slow_h);      //h_a =a bs horizontal(left/right) value
-  // sign_h = h_a / slow_h;  //memoring sign
-  // v_a = abs(slow_v);
-  // sign_v = v_a / slow_v;
+  h_a = abs(slow_h);      //h_a =a bs horizontal(left/right) value
+  sign_h = h_a / slow_h;  //memoring sign
+  v_a = abs(slow_v);
+  sign_v = v_a / slow_v;
 
-  // if ((v_a + h_a) > 127) {  //v & h are redused when (v_a + h_a) > 127
-  //   v = (v_a * 127 / (v_a + h_a));
-  //   h = (h_a * 127 / (v_a + h_a));
-  // } else {
-  //   v = v_a;
-  //   h = h_a;
-  // }
-  // v = sign_v * 2 * v;  //from (0 to 127) to (-255 to 255)
-  // h = sign_h * 2 * h;
+  if ((v_a + h_a) > 127) {  //v & h are redused when (v_a + h_a) > 127
+    v = (v_a * 127 / (v_a + h_a));
+    h = (h_a * 127 / (v_a + h_a));
+  } else {
+    v = v_a;
+    h = h_a;
+  }
+  v = sign_v * 2 * v;  //from (0 to 127) to (-255 to 255)
+  h = sign_h * 2 * h;
 
-  // if ((v - h) > 0) {  //setting switchs for motor directions
-  //   Rdir_forw = 1;
-  //   Rdir_back = 0;
-  //   Rdir_forwH = 1;
-  //   Rdir_backH = 0;
-  // } else if ((v - h) == 0) {
-  //   Rdir_forw = 0;
-  //   Rdir_back = 0;
-  //   Rdir_forwH = 0;
-  //   Rdir_backH = 0;
-  // } else {
-  //   Rdir_forw = 0;
-  //   Rdir_back = 1;
-  //   Rdir_forwH = 0;
-  //   Rdir_backH = 1;
-  // }
-  // if ((v + h) > 0) {
-  //   Ldir_forw = 1;
-  //   Ldir_back = 0;
-  //   Ldir_forwH = 1;
-  //   Ldir_backH = 0;
-  // } else if ((v + h) == 0) {
-  //   Ldir_forw = 0;
-  //   Ldir_back = 0;
-  //   Ldir_forwH = 0;
-  //   Ldir_backH = 0;
-  // } else {
-  //   Ldir_forw = 0;
-  //   Ldir_back = 1;
-  //   Ldir_forwH = 0;
-  //   Ldir_backH = 1;
-  // }
-  // wdt_reset();
+  if ((v - h) > 0) {  //setting switchs for motor directions
+    Rdir_forw = 1;
+    Rdir_back = 0;
+    Rdir_forwH = 1;
+    Rdir_backH = 0;
+  } else if ((v - h) == 0) {
+    Rdir_forw = 0;
+    Rdir_back = 0;
+    Rdir_forwH = 0;
+    Rdir_backH = 0;
+  } else {
+    Rdir_forw = 0;
+    Rdir_back = 1;
+    Rdir_forwH = 0;
+    Rdir_backH = 1;
+  }
+  if ((v + h) > 0) {
+    Ldir_forw = 1;
+    Ldir_back = 0;
+    Ldir_forwH = 1;
+    Ldir_backH = 0;
+  } else if ((v + h) == 0) {
+    Ldir_forw = 0;
+    Ldir_back = 0;
+    Ldir_forwH = 0;
+    Ldir_backH = 0;
+  } else {
+    Ldir_forw = 0;
+    Ldir_back = 1;
+    Ldir_forwH = 0;
+    Ldir_backH = 1;
+  }
+  wdt_reset();
   
-  // //left & right motor
-  // digitalWrite(RmotHF, Rdir_forwH);
-  // analogWrite(RmotLF, abs(v - h) * Rdir_forw);  //transfer values from joystick to motors
-  // digitalWrite(RmotHB, Rdir_backH);
-  // analogWrite(RmotLB, abs(v - h) * Rdir_back);  //transfer values from joystick to motors
-  // digitalWrite(LmotHF, Ldir_forwH);
-  // analogWrite(LmotLF, abs(v + h) * Ldir_forw);  //transfer values from joystick to motors
-  // digitalWrite(LmotHB, Ldir_backH);
-  // analogWrite(LmotLB, abs(v + h) * Ldir_back);  //transfer values from joystick to motors
-  // if (EL[7] == HIGH) {                          //
-  //   EL[7] = 0;
-  // }
-  // if (EL[8] == HIGH) {  //
-  //   EL[8] = 0;
-  // }
-  // if (EL[9] == HIGH) {  //
-  //   EL[9] = 0;
-  // }
-  // if (EL[10] == HIGH) {  //
-  //   EL[10] = 0;
-  //   GabotFingers.DoGrab(data[1]);
-  //   // rls = HIGH; //release OFF
-  //   // grab = data[1]; //grab ON/OFF
-  // }
-  // if (EL[11] == HIGH) {  //release
-  //   EL[11] = 0;
-  //   GabotFingers.DoRelease(data[1]);
-  //   // grab = HIGH; //grab OFF
-  //   // rls = data[1]; //release ON/OFF
-  // }
-  // //digitalWrite(motFG, grab); //wanted condition on output
-  // //digitalWrite(motFR, rls); //wanted condition on output
-  // wdt_reset();
+  //left & right motor
+  digitalWrite(RmotHF, Rdir_forwH);
+  analogWrite(RmotLF, abs(v - h) * Rdir_forw);  //transfer values from joystick to motors
+  digitalWrite(RmotHB, Rdir_backH);
+  analogWrite(RmotLB, abs(v - h) * Rdir_back);  //transfer values from joystick to motors
+  digitalWrite(LmotHF, Ldir_forwH);
+  analogWrite(LmotLF, abs(v + h) * Ldir_forw);  //transfer values from joystick to motors
+  digitalWrite(LmotHB, Ldir_backH);
+  analogWrite(LmotLB, abs(v + h) * Ldir_back);  //transfer values from joystick to motors
+  if (EL[7] == HIGH) {                          //
+    EL[7] = 0;
+  }
+  if (EL[8] == HIGH) {  //
+    EL[8] = 0;
+  }
+  if (EL[9] == HIGH) {  //
+    EL[9] = 0;
+  }
+  if (EL[10] == HIGH) {  //
+    EL[10] = 0;
+    GabotFingers.DoGrab(data[1]);
+    // rls = HIGH; //release OFF
+    // grab = data[1]; //grab ON/OFF
+  }
+  if (EL[11] == HIGH) {  //release
+    EL[11] = 0;
+    GabotFingers.DoRelease(data[1]);
+    // grab = HIGH; //grab OFF
+    // rls = data[1]; //release ON/OFF
+  }
+  //digitalWrite(motFG, grab); //wanted condition on output
+  //digitalWrite(motFR, rls); //wanted condition on output
+  wdt_reset();
 
-  // GabotFingers.FingerMotors();
+  GabotFingers.FingerMotors();
 
-  // if (BUZ_ON || !BAT_OK) {
-  //   //  if(BUZ_ON){
-  //   BUZ_STATE = !BUZ_STATE;
-  //   digitalWrite(buzzer, BUZ_STATE);
-  //   buzz_count--;
-  //   if (buzz_count == 0) {
-  //     BUZ_ON = 0;
-  //     BAT_OK = 1;
-  //     buzz_count = 100;
-  //   }
-  // }
+  if (BUZ_ON || !BAT_OK) {
+    //  if(BUZ_ON){
+    BUZ_STATE = !BUZ_STATE;
+    digitalWrite(buzzer, BUZ_STATE);
+    buzz_count--;
+    if (buzz_count == 0) {
+      BUZ_ON = 0;
+      BAT_OK = 1;
+      buzz_count = 100;
+    }
+  }
 
-  // //TIMERS
-  // if (millis() - time_now > 100) {  //every second go trough without owerfloat
-  //   time_now = millis();
-  //   //protective of motor grab/release before long run
-  //   // if(rls == LOW){ //if release active = LOW
-  //   //   countR++;  //every 100ms inc counter
-  //   // }
-  //   // else{
-  //   //   countR = 0;  //if release not active
-  //   // }
-  //   // if(countR > 33){  //max time of release 3.3 s
-  //   //   rls = HIGH;
-  //   //   countR = 0;
-  //   // }
-  //   // //similary for grab
-  //   // if(grab == LOW){
-  //   //   countG++;
-  //   // }
-  //   // else{
-  //   //   countG = 0;
-  //   // }
-  //   // if(countG > 33){  //max time of grab 3.3 s
-  //   //   grab = HIGH;
-  //   //   countG = 0;
-  //   // }
-  // }
+  //TIMERS
+  if (millis() - time_now > 100) {  //every second go trough without owerfloat
+    time_now = millis();
+    //protective of motor grab/release before long run
+    // if(rls == LOW){ //if release active = LOW
+    //   countR++;  //every 100ms inc counter
+    // }
+    // else{
+    //   countR = 0;  //if release not active
+    // }
+    // if(countR > 33){  //max time of release 3.3 s
+    //   rls = HIGH;
+    //   countR = 0;
+    // }
+    // //similary for grab
+    // if(grab == LOW){
+    //   countG++;
+    // }
+    // else{
+    //   countG = 0;
+    // }
+    // if(countG > 33){  //max time of grab 3.3 s
+    //   grab = HIGH;
+    //   countG = 0;
+    // }
+  }
 }

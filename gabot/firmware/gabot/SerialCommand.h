@@ -7,6 +7,12 @@
 class Fingers;
 class Servo;
 
+typedef enum {
+    SerialCmd_None = 0,
+    SerialCmd_Success = 1,
+    SerialCmd_Error = 2,
+} SerialCmdResult;
+
 class SerialCommand
 {
 public:
@@ -15,15 +21,15 @@ public:
 
     void setMotors(Servo& f, Servo& c, Servo& h);
 
-    void Process();
+    int Process();
 
 private:
 
-    void processCommand(String cmd);
-    void cmdGetVersion();
-    void cmdGrab(String args);
-    void cmdRelease(String args);
-    void cmdMotorPos(Servo& motor, int position);
+    int processCommand(String cmd);
+    int cmdGetVersion();
+    int cmdGrab(String args);
+    int cmdRelease(String args);
+    int cmdMotorPos(Servo& motor, int position);
 
     Fingers& m_fingers;
     Servo* m_motorF;

@@ -24,8 +24,9 @@ void SerialCommand::setMotors(Servo& f, Servo& c, Servo& h)
     m_motorH = &h;
 }
 
-void SerialCommand::Process()
+int SerialCommand::Process()
 {
+    int returnVal = SerialCmd_None;
     while (Serial.available() > 0) {
         char c = Serial.read();
         if (c == '\n' || c == '\r') {
@@ -34,16 +35,17 @@ void SerialCommand::Process()
                 Serial.print("Processing command: ");
                 Serial.println(m_buffer);
                 Serial.println();*/
-                processCommand(m_buffer);
+                returnVal = processCommand(m_buffer);
                 m_buffer = "";
             }
         } else {
             m_buffer += c;
         }
     }
+    return returnVal;
 }
 
-void SerialCommand::processCommand(String cmd)
+int SerialCommand::processCommand(String cmd)
 {
     cmd.trim();
 
@@ -51,45 +53,52 @@ void SerialCommand::processCommand(String cmd)
         return;
     }
 
+    int returnVal = SerialCmd_None;
     if (cmd.equalsIgnoreCase("get version")) {
         cmdGetVersion();
     }
     else if (cmd.startsWith("grab ") || cmd.startsWith("GRAB ")) {
-        cmdGrab(cmd.substring(5));
+        returnVal = cmdGrab(cmd.substring(5));
     }
     else if (cmd.startsWith("release ") || cmd.startsWith("RELEASE ")) {
-        cmdRelease(cmd.substring(7));
+        returnVal = cmdRelease(cmd.substring(7));
     }
     else if (cmd.startsWith("motor ") || cmd.startsWith("MOTOR ")) {
         String motor = cmd.substring(6, 7);
         motor.toLowerCase();
         int position = cmd.substring(8).toInt();
+
+        Serial.print("motor ");
+        Serial.print(motor);
+        Serial.println(":");
         if (motor == "f" && m_motorF) {
-            cmdMotorPos(*m_motorF, position);
+            returnVal = cmdMotorPos(*m_motorF, position);
         } else if (motor == "c" && m_motorC) {
-            cmdMotorPos(*m_motorC, position);
+            returnVal = cmdMotorPos(*m_motorC, position);
         } else if (motor == "h" && m_motorH) {
-            cmdMotorPos(*m_motorH, position);
+            returnVal = cmdMotorPos(*m_motorH, position);
         } else {
             Serial.println("ERR: unknown motor");
         }
     }
     else {
+        returnVal = SerialCmd_Error;
         Serial.print("ERR: unknown command: ");
         Serial.println(cmd);
     }
 }
 
-void SerialCommand::cmdGetVersion()
+int SerialCommand::cmdGetVersion()
 {
     Serial.print(m_verMajor);
     Serial.print(".");
     Serial.print(m_verMinor);
     Serial.print(".");
     Serial.println(m_verMicro);
+    return SerialCmd_Success;
 }
 
-void SerialCommand::cmdGrab(String args)
+int SerialCommand::cmdGrab(String args)
 {
     args.trim();
     int value = args.toInt();
@@ -97,12 +106,14 @@ void SerialCommand::cmdGrab(String args)
         m_fingers.DoGrab((byte)value);
         Serial.print("OK grab ");
         Serial.println(value);
+        return SerialCmd_Success;
     } else {
         Serial.println("ERR: grab value out of range");
+        return SerialCmd_Error;
     }
 }
 
-void SerialCommand::cmdRelease(String args)
+int SerialCommand::cmdRelease(String args)
 {
     args.trim();
     int value = args.toInt();
@@ -110,14 +121,17 @@ void SerialCommand::cmdRelease(String args)
         m_fingers.DoRelease((byte)value);
         Serial.print("OK release ");
         Serial.println(value);
+        return SerialCmd_Success;
     } else {
         Serial.println("ERR: grab value out of range");
+        return SerialCmd_Error;
     }
 }
 
-void SerialCommand::cmdMotorPos(Servo& motor, int position)
+int SerialCommand::cmdMotorPos(Servo& motor, int position)
 {
     motor.write(position);
     Serial.print("OK motor ");
     Serial.println(position);
+    return SerialCmd_Success;
 }
