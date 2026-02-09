@@ -20,6 +20,8 @@ public:
     ~SerialCommand();
 
     void setMotors(Servo& f, Servo& c, Servo& h, byte* valueC, byte* valueH);
+    void setShoulderPins(byte lE, byte hE, byte lW, byte hW,
+                         byte lU, byte hU, byte lD, byte hD);
 
     int Process();
 
@@ -30,6 +32,8 @@ private:
     int cmdGrab(String args);
     int cmdRelease(String args);
     int cmdMotorPos(Servo& motor, byte* valuePtr, int position);
+    int cmdShoulderHorizontal(String args);
+    int cmdShoulderVertical(String args);
 
     Fingers& m_fingers;
     Servo* m_motorF;
@@ -37,6 +41,10 @@ private:
     Servo* m_motorH;
     byte* m_motorC_value;
     byte* m_motorH_value;
+
+    byte m_motLE, m_motHE, m_motLW, m_motHW;
+    byte m_motLU, m_motHU, m_motLD, m_motHD;
+
     String m_buffer;
     int m_verMajor;
     int m_verMinor;

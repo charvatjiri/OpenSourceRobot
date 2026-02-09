@@ -18,6 +18,13 @@
 #include <avr/wdt.h>
 #include <Wire.h>
 
+void wdt_init(void) __attribute__((naked)) __attribute__((section(".init3")));
+void wdt_init(void)
+{
+    MCUSR = 0;
+    wdt_disable();
+}
+
 #include "Radio.h"
 #include "Fingers.h"
 #include "SerialCommand.h"
@@ -196,10 +203,11 @@ volatile byte pokus;
 //void interruptHandler(); // prototype to handle IRQ events
 
 void setup(void) {
+  MCUSR = 0;
+  wdt_disable();
 
   Serial.begin(115200);
   Serial.println("RESET");
-  wdt_enable(WDTO_120MS);
 
   //   motorF.attach(8); //servoA - pin 8
   motorC.attach(11);
@@ -261,6 +269,8 @@ void setup(void) {
   // initialize the transceiver on the SPI bus
   GabotRadio.Init();
   GabotSerial.setMotors(motorF, motorC, motorH, &motorC_value, &motorH_value);
+  GabotSerial.setShoulderPins(motLE, motHE, motLW, motHW,
+                               motLU, motHU, motLD, motHD);
 
   // Initialize new modules from GABOT23
   GabotAngle.Init(4);  // direction pin
@@ -289,6 +299,7 @@ void setup(void) {
   //    GabotRadio.m_radio.maskIRQ(1, 1, 1); // args = "data_sent", "data_fail", "data_ready"
   BUZ_ON = 1;
   buzz_count = 50;
+  // wdt_enable(WDTO_2S);
 }
 
 //static unsigned long lastPing = 0;
@@ -719,16 +730,13 @@ void loop(void) {
   if (millis() - time_now > 100) {
     time_now = millis();
 
-    // Read angle from AS5600 sensor
+    wdt_reset();
     GabotAngle.ReadAngle();
-
-    // Update overcurrent protection
+    wdt_reset();
     GabotOvercurrent.Update();
-
-    // Update battery monitor
+    wdt_reset();
     GabotBattery.Update();
-
-    // Update finger timeout and current protection
+    wdt_reset();
     GabotFingers.Update();
   }
 }

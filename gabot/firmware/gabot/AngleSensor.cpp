@@ -7,6 +7,7 @@ AS5600 as5600;
 
 AngleSensor::AngleSensor()
     : m_angle(0)
+    , m_connected(false)
 {
 }
 
@@ -17,12 +18,20 @@ AngleSensor::~AngleSensor()
 void AngleSensor::Init(uint8_t directionPin)
 {
     Wire.begin();
-    as5600.begin(directionPin);
-    as5600.setDirection(AS5600_CLOCK_WISE);
+    Wire.setClock(100000);
+    Wire.beginTransmission(0x36);  // AS5600 I2C address
+    m_connected = (Wire.endTransmission() == 0);
+    if (m_connected) {
+        as5600.begin(directionPin);
+        as5600.setDirection(AS5600_CLOCK_WISE);
+    } else {
+        Serial.println(F("AS5600 angle sensor not found"));
+    }
 }
 
 int AngleSensor::ReadAngle()
 {
+    if (!m_connected) return m_angle;
     m_angle = as5600.readAngle();
     m_angle = m_angle - ANGLE_OFFSET;
 

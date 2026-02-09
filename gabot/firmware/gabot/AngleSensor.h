@@ -19,6 +19,7 @@ private:
     static const int ANGLE_OFFSET = 1328;  // angle correction when arm is forward
     static const int ANGLE_LIMIT = 2000;   // limit for arm movement
     int m_angle;
+    bool m_connected;
 };
 
 #endif
