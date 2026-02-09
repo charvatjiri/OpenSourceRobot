@@ -27,7 +27,7 @@
 
 #define VER_MAJOR 3
 #define VER_MINOR 1
-#define VER_MICRO 0
+#define VER_MICRO 1
 
 //#define CE 9  //UNO
 #define CE 49  //mega

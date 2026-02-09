@@ -52,12 +52,12 @@ int SerialCommand::processCommand(String cmd)
     cmd.trim();
 
     if (cmd.length() == 0) {
-        return;
+        return SerialCmd_None;
     }
 
     int returnVal = SerialCmd_None;
     if (cmd.equalsIgnoreCase("get version")) {
-        cmdGetVersion();
+        returnVal = cmdGetVersion();
     }
     else if (cmd.startsWith("grab ") || cmd.startsWith("GRAB ")) {
         returnVal = cmdGrab(cmd.substring(5));
@@ -65,29 +65,24 @@ int SerialCommand::processCommand(String cmd)
     else if (cmd.startsWith("release ") || cmd.startsWith("RELEASE ")) {
         returnVal = cmdRelease(cmd.substring(7));
     }
-    else if (cmd.startsWith("motor ") || cmd.startsWith("MOTOR ")) {
-        String motor = cmd.substring(6, 7);
-        motor.toLowerCase();
+    else if (cmd.startsWith("wrist horizontal ") || cmd.startsWith("WRIST HORIZONTAL ")) {
+        int position = cmd.substring(17).toInt();
+        returnVal = cmdMotorPos(*m_motorC, m_motorC_value, position);
+    }
+    else if (cmd.startsWith("wrist vertical ") || cmd.startsWith("WRIST VERTICAL ")) {
+        int position = cmd.substring(12).toInt();
+        returnVal = cmdMotorPos(*m_motorH, m_motorH_value, position);
+    }
+    else if (cmd.startsWith("motor f") || cmd.startsWith("MOTOR F")) {
         int position = cmd.substring(8).toInt();
-
-        Serial.print("motor ");
-        Serial.print(motor);
-        Serial.println(":");
-        if (motor == "f" && m_motorF) {
-            returnVal = cmdMotorPos(*m_motorF, nullptr, position);
-        } else if (motor == "c" && m_motorC) {
-            returnVal = cmdMotorPos(*m_motorC, m_motorC_value, position);
-        } else if (motor == "h" && m_motorH) {
-            returnVal = cmdMotorPos(*m_motorH, m_motorH_value, position);
-        } else {
-            Serial.println("ERR: unknown motor");
-        }
+        returnVal = cmdMotorPos(*m_motorF, nullptr, position);
     }
     else {
         returnVal = SerialCmd_Error;
         Serial.print("ERR: unknown command: ");
         Serial.println(cmd);
     }
+    return returnVal;
 }
 
 int SerialCommand::cmdGetVersion()
