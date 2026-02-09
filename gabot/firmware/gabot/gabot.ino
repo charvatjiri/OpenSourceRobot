@@ -181,7 +181,7 @@ BatteryMonitor GabotBattery;
 
 //#define IRQ_PIN 21 // this needs to be a digital input capable pin --- not used
 volatile bool wait_for_event = false;  // used to wait for an IRQ event to trigger
-volatile char data[2];
+byte data[2];
 //volatile char element_R[16];
 //volatile bool EL_R[16];
 char element[16];  //value for every element (joystick, button)
@@ -291,7 +291,7 @@ void setup(void) {
   buzz_count = 50;
 }
 
-static unsigned long lastPing = 0;
+//static unsigned long lastPing = 0;
 
 void loop(void) {
   wdt_reset();
@@ -316,6 +316,7 @@ void loop(void) {
   
   if (GabotSerial.Process() == SerialCmd_Success)
     return;
+  wdt_reset();
 
   if (RadioOK == 1) {  //a special code has been received
     citRadio = 0;      //reset counter for radio watch dog
@@ -329,6 +330,7 @@ void loop(void) {
     GabotRadio.Restart();
     BUZ_ON = 1;  //will be short beep
   }
+  wdt_reset();
 
   while (GabotRadio.Available()) {                 //when a signal has been received
     wdt_reset();
@@ -536,6 +538,7 @@ void loop(void) {
     dir_forw = 0;
     dir_forwH = 0;
   }
+  wdt_reset();
   if (GabotAngle.IsAtWestLimit() || GabotOvercurrent.IsWEStopped()) {
     analogWrite(motLW, 0);
     digitalWrite(motHW, 0);
