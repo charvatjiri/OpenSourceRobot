@@ -72,14 +72,14 @@ int SerialCommand::processCommand(String cmd)
         returnVal = cmdGrab(cmd.substring(5));
     }
     else if (cmd.startsWith("release ") || cmd.startsWith("RELEASE ")) {
-        returnVal = cmdRelease(cmd.substring(7));
+        returnVal = cmdRelease(cmd.substring(8));
     }
     else if (cmd.startsWith("wrist horizontal ") || cmd.startsWith("WRIST HORIZONTAL ")) {
         int position = cmd.substring(17).toInt();
         returnVal = cmdMotorPos(*m_motorC, m_motorC_value, position);
     }
     else if (cmd.startsWith("wrist vertical ") || cmd.startsWith("WRIST VERTICAL ")) {
-        int position = cmd.substring(12).toInt();
+        int position = cmd.substring(15).toInt();
         returnVal = cmdMotorPos(*m_motorH, m_motorH_value, position);
     }
     else if (cmd.startsWith("motor f") || cmd.startsWith("MOTOR F")) {
