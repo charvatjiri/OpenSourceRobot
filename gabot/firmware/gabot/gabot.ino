@@ -34,7 +34,7 @@ void wdt_init(void)
 
 #define VER_MAJOR 3
 #define VER_MINOR 1
-#define VER_MICRO 1
+#define VER_MICRO 2
 
 //#define CE 9  //UNO
 #define CE 49  //mega
@@ -138,16 +138,16 @@ byte part2;
 int part3;
 int rychlV;
 int rychlH;
-int v;
-int h;
-int sign_h;
-int sign_v;
-int lim_v;
-int lim_h;
-int slow_h;
-int slow_v;
-int h_a;
-int v_a;
+int fb;
+int rl;
+int sign_rl;
+int sign_fb;
+int lim_fb;
+int lim_rl;
+int slow_rl;
+int slow_fb;
+int rl_a;
+int fb_a;
 unsigned long timeC;
 unsigned long timeH;
 byte i;
@@ -276,8 +276,8 @@ void setup(void) {
   //    sen_B_old = sensor_back_state;
   //    sen_F_old = sensor_forw_state;
   //    angle = 0;
-  slow_h = 0;
-  slow_v = 0;
+  slow_rl = 0;
+  slow_fb = 0;
   motorH_value = 80;
   motorH.write(motorH_value);
   // initialize the transceiver on the SPI bus
@@ -507,7 +507,7 @@ void loop(void) {
   }
   wdt_reset();
 
-  // Wrist servo H (Up-Down) - radio element[WRIST_SERVO_H_UD]
+  // Wrist servo rl (Up-Down) - radio element[WRIST_SERVO_H_UD]
   if (EL[WRIST_SERVO_H_UD] == HIGH) {
     EL[WRIST_SERVO_H_UD] = 0;
   }
@@ -614,41 +614,41 @@ void loop(void) {
   }
   if (EL[WHEELS_FB] == HIGH) {  //+forward, -back
     EL[WHEELS_FB] = 0;          //now not used
+  }rl_a
+  if (element[WHEELS_RL] > slow_rl) {  //element[WHEELS_RL]=left/right from joystick
+    slow_rl++;                 //value for motors is changing only for small steps
   }
-  if (element[WHEELS_RL] > slow_h) {  //element[WHEELS_RL]=left/right from joystick
-    slow_h++;                 //value for motors is changing only for small steps
+  if (element[WHEELS_RL] < slow_rl) {
+    slow_rl--;
   }
-  if (element[WHEELS_RL] < slow_h) {
-    slow_h--;
+  if (element[WHEELS_FB] > slow_fb) {  //element[WHEELS_FB]=forward/back from joystick
+    slow_fb++;
   }
-  if (element[WHEELS_FB] > slow_v) {  //element[WHEELS_FB]=forward/back from joystick
-    slow_v++;
-  }
-  if (element[WHEELS_FB] < slow_v) {
-    slow_v--;
+  if (element[WHEELS_FB] < slow_fb) {
+    slow_fb--;
   }
 
-  h_a = abs(slow_h);      //h_a =a bs horizontal(left/right) value
-  sign_h = h_a / slow_h;  //memoring sign
-  v_a = abs(slow_v);
-  sign_v = v_a / slow_v;
+  rl_a = abs(slow_rl);      //rl_a =a bs horizontal(left/right) value
+  sign_rl = rl_a / slow_rl;  //memoring sign
+  fb_a = abs(slow_fb);
+  sign_fb = fb_a / slow_fb;
 
-  if ((v_a + h_a) > 127) {  //v & h are redused when (v_a + h_a) > 127
-    v = (v_a * 127 / (v_a + h_a));
-    h = (h_a * 127 / (v_a + h_a));
+  if ((fb_a + rl_a) > 127) {  //v & rl are redused when (fb_a + rl_a) > 127
+    fb = (fb_a * 127 / (fb_a + rl_a));
+    rl = (rl_a * 127 / (fb_a + rl_a));
   } else {
-    v = v_a;
-    h = h_a;
+    fb = fb_a;
+    rl = rl_a;
   }
-  v = sign_v * 2 * v;  //from (0 to 127) to (-255 to 255)
-  h = sign_h * 2 * h;
+  fb = sign_fb * 2 * fb;  //from (0 to 127) to (-255 to 255)
+  rl = sign_rl * 2 * rl;
 
-  if ((v - h) > 0) {  //setting switchs for motor directions
+  if ((fb - rl) > 0) {  //setting switchs for motor directions
     Rdir_forw = 1;
     Rdir_back = 0;
     Rdir_forwH = 1;
     Rdir_backH = 0;
-  } else if ((v - h) == 0) {
+  } else if ((fb - rl) == 0) {
     Rdir_forw = 0;
     Rdir_back = 0;
     Rdir_forwH = 0;
@@ -659,12 +659,12 @@ void loop(void) {
     Rdir_forwH = 0;
     Rdir_backH = 1;
   }
-  if ((v + h) > 0) {
+  if ((fb + rl) > 0) {
     Ldir_forw = 1;
     Ldir_back = 0;
     Ldir_forwH = 1;
     Ldir_backH = 0;
-  } else if ((v + h) == 0) {
+  } else if ((fb + rl) == 0) {
     Ldir_forw = 0;
     Ldir_back = 0;
     Ldir_forwH = 0;
@@ -685,9 +685,9 @@ void loop(void) {
     analogWrite(LmotLB, 0);
   } else {
     digitalWrite(LmotHF, Ldir_forwH);
-    analogWrite(LmotLF, abs(v + h) * Ldir_forw);
+    analogWrite(LmotLF, abs(fb +rl) * Ldir_forw);
     digitalWrite(LmotHB, Ldir_backH);
-    analogWrite(LmotLB, abs(v + h) * Ldir_back);
+    analogWrite(LmotLB, abs(fb + rl) * Ldir_back);
   }
 
   if (GabotOvercurrent.IsRightStopped()) {
@@ -697,9 +697,9 @@ void loop(void) {
     analogWrite(RmotLB, 0);
   } else {
     digitalWrite(RmotHF, Rdir_forwH);
-    analogWrite(RmotLF, abs(v - h) * Rdir_forw);
+    analogWrite(RmotLF, abs(fb - rl) * Rdir_forw);
     digitalWrite(RmotHB, Rdir_backH);
-    analogWrite(RmotLB, abs(v - h) * Rdir_back);
+    analogWrite(RmotLB, abs(fb - rl) * Rdir_back);
   }
   if (EL[7] == HIGH) {                          //
     EL[7] = 0;
