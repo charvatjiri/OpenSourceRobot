@@ -194,6 +194,20 @@ byte data[2];
 char element[16];  //value for every element (joystick, button)
 bool EL[16];       //HIGH = new value
 
+// Radio elements
+#define WRIST_SERVO_C_RL 0
+#define WRIST_SERVO_H_UD 1
+
+#define ARM_SERVO_LR 2 //arm servo left/right
+#define ARM_SERVO_UD 3 //arm servo up/dpwn
+
+#define WHEELS_RL 4
+#define WHEELS_FB 5
+
+#define FINGERS_GRAB 10
+#define FINGERS_RELEASE 11
+
+
 // adresy a kanál
 const byte vysilac[] = "TX001";
 const byte prijimac[] = "RX001";
@@ -478,49 +492,49 @@ void loop(void) {
   wdt_reset();
 
   // Wrist servo C (Right-Left Rotate) - radio element[0]
-  if (EL[0] == HIGH) {
-    EL[0] = 0;
+  if (EL[WRIST_SERVO_C_RL] == HIGH) {
+    EL[WRIST_SERVO_C_RL] = 0;
   }
   if (millis() > timeC) {
-    timeC = millis() + (138 - abs(element[0]));
-    if ((element[0] > 0) && (motorC_value < 166)) {
+    timeC = millis() + (138 - abs(element[WRIST_SERVO_C_RL]));
+    if ((element[WRIST_SERVO_C_RL] > 0) && (motorC_value < 166)) {
       motorC_value++;
     }
-    if ((element[0] < 0) && (motorC_value > 0)) {
+    if ((element[WRIST_SERVO_C_RL] < 0) && (motorC_value > 0)) {
       motorC_value--;
     }
     motorC.write(motorC_value);
   }
   wdt_reset();
 
-  // Wrist servo H (Up-Down) - radio element[1]
-  if (EL[1] == HIGH) {
-    EL[1] = 0;
+  // Wrist servo H (Up-Down) - radio element[WRIST_SERVO_H_UD]
+  if (EL[WRIST_SERVO_H_UD] == HIGH) {
+    EL[WRIST_SERVO_H_UD] = 0;
   }
   if (millis() > timeH) {
-    timeH = millis() + (138 - abs(element[1]));
-    if ((element[1] > 0) && (motorH_value < 166)) {
+    timeH = millis() + (138 - abs(element[WRIST_SERVO_H_UD]));
+    if ((element[WRIST_SERVO_H_UD] > 0) && (motorH_value < 166)) {
       motorH_value++;
     }
-    if ((element[1] < 0) && (motorH_value > 0)) {
+    if ((element[WRIST_SERVO_H_UD] < 0) && (motorH_value > 0)) {
       motorH_value--;
     }
     motorH.write(motorH_value);
   }
   wdt_reset();
 
-  if (EL[2] == HIGH) {  //
-    EL[2] = 0;
+  if (EL[ARM_SERVO_LR] == HIGH) {
+    EL[ARM_SERVO_LR] = 0;
 
-    if (element[2] < 0) {  //element[2]=arm left/right
+    if (element[ARM_SERVO_LR] < 0) {
       dir_forw = 0;
       dir_back = 1;
       dir_forwH = 0;
       dir_backH = 1;
-      //      part3 = element[2] * (-2);
-      part3 = element[2] * (-1);  //speed redused by half
+      //      part3 = element[ARM_SERVO_LR] * (-2);
+      part3 = element[ARM_SERVO_LR] * (-1);  //speed redused by half
       last_dir = -1;
-    } else if (element[2] == 0) {
+    } else if (element[ARM_SERVO_LR] == 0) {
       dir_forw = 0;
       dir_back = 0;
       dir_forwH = 0;
@@ -531,8 +545,8 @@ void loop(void) {
       dir_back = 0;
       dir_forwH = 1;
       dir_backH = 0;
-      //part3 = element[2] * 2;
-      part3 = element[2];  //speed redused by half
+      //part3 = element[ARM_SERVO_LR] * 2;
+      part3 = element[ARM_SERVO_LR];  //speed redused by half
       last_dir = 1;
     }
     digitalWrite(motHE, dir_forwH);
@@ -558,16 +572,16 @@ void loop(void) {
   }
   wdt_reset();
 
-  if (EL[3] == HIGH) {
-    EL[3] = 0;
+  if (EL[ARM_SERVO_UD] == HIGH) {
+    EL[ARM_SERVO_UD] = 0;
 
-    if (element[3] < 0) {  //element[3]=arm down/up
+    if (element[ARM_SERVO_UD] < 0) {
       dir_forw = 0;
       dir_back = 1;
       dir_forwH = 0;
       dir_backH = 1;
-      part3 = element[3] * (-2);
-    } else if (element[3] == 0) {
+      part3 = element[ARM_SERVO_UD] * (-2);
+    } else if (element[ARM_SERVO_UD] == 0) {
       dir_forw = 0;
       dir_back = 0;
       dir_forwH = 0;
@@ -578,7 +592,7 @@ void loop(void) {
       dir_back = 0;
       dir_forwH = 1;
       dir_backH = 0;
-      part3 = element[3] * 2;
+      part3 = element[ARM_SERVO_UD] * 2;
     }
     // UD motor with overcurrent protection (GABOT23 feature)
     if (!GabotOvercurrent.IsUDStopped()) {
@@ -595,22 +609,22 @@ void loop(void) {
   }
   wdt_reset();
 
-  if (EL[4] == HIGH) {  //+right, - left
-    EL[4] = 0;          //now not used
+  if (EL[WHEELS_RL] == HIGH) {  //+right, - left
+    EL[WHEELS_RL] = 0;          //now not used
   }
-  if (EL[5] == HIGH) {  //+forward, -back
-    EL[5] = 0;          //now not used
+  if (EL[WHEELS_FB] == HIGH) {  //+forward, -back
+    EL[WHEELS_FB] = 0;          //now not used
   }
-  if (element[4] > slow_h) {  //element[4]=left/right from joystick
+  if (element[WHEELS_RL] > slow_h) {  //element[WHEELS_RL]=left/right from joystick
     slow_h++;                 //value for motors is changing only for small steps
   }
-  if (element[4] < slow_h) {
+  if (element[WHEELS_RL] < slow_h) {
     slow_h--;
   }
-  if (element[5] > slow_v) {  //element[5]=forward/back from joystick
+  if (element[WHEELS_FB] > slow_v) {  //element[WHEELS_FB]=forward/back from joystick
     slow_v++;
   }
-  if (element[5] < slow_v) {
+  if (element[WHEELS_FB] < slow_v) {
     slow_v--;
   }
 
@@ -696,14 +710,14 @@ void loop(void) {
   if (EL[9] == HIGH) {  //
     EL[9] = 0;
   }
-  if (EL[10] == HIGH) {  //
-    EL[10] = 0;
+  if (EL[FINGERS_GRAB] == HIGH) {  //
+    EL[FINGERS_GRAB] = 0;
     GabotFingers.DoGrab(data[1]);
     // rls = HIGH; //release OFF
     // grab = data[1]; //grab ON/OFF
   }
-  if (EL[11] == HIGH) {  //release
-    EL[11] = 0;
+  if (EL[FINGERS_RELEASE] == HIGH) {  //release
+    EL[FINGERS_RELEASE] = 0;
     GabotFingers.DoRelease(data[1]);
     // grab = HIGH; //grab OFF
     // rls = data[1]; //release ON/OFF
