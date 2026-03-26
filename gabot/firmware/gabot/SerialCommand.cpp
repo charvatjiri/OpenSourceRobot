@@ -8,6 +8,8 @@ SerialCommand::SerialCommand(Fingers& fingers, int verMajor, int verMinor, int v
     , m_motorH(nullptr)
     , m_motLE(0), m_motHE(0), m_motLW(0), m_motHW(0)
     , m_motLU(0), m_motHU(0), m_motLD(0), m_motHD(0)
+    , m_elementRL(nullptr)
+    , m_elementFB(nullptr)
     , m_buffer("")
     , m_verMajor(verMajor)
     , m_verMinor(verMinor)
@@ -33,6 +35,12 @@ void SerialCommand::setShoulderPins(byte lE, byte hE, byte lW, byte hW,
 {
     m_motLE = lE; m_motHE = hE; m_motLW = lW; m_motHW = hW;
     m_motLU = lU; m_motHU = hU; m_motLD = lD; m_motHD = hD;
+}
+
+void SerialCommand::setWheelElements(char* elementRL, char* elementFB)
+{
+    m_elementRL = elementRL;
+    m_elementFB = elementFB;
 }
 
 int SerialCommand::Process()
@@ -91,6 +99,12 @@ int SerialCommand::processCommand(String cmd)
     }
     else if (cmd.startsWith("shoulder vertical ") || cmd.startsWith("SHOULDER VERTICAL ")) {
         returnVal = cmdShoulderVertical(cmd.substring(18));
+    }
+    else if (cmd.startsWith("wheels rl ") || cmd.startsWith("WHEELS RL ")) {
+        returnVal = cmdWheelsRL(cmd.substring(10));
+    }
+    else if (cmd.startsWith("wheels fb ") || cmd.startsWith("WHEELS FB ")) {
+        returnVal = cmdWheelsFB(cmd.substring(10));
     }
     else {
         returnVal = SerialCmd_Error;
@@ -205,6 +219,38 @@ int SerialCommand::cmdShoulderVertical(String args)
         analogWrite(m_motLD, 0);
     }
     Serial.print("OK shoulder vertical ");
+    Serial.println(speed);
+    return SerialCmd_Success;
+}
+
+int SerialCommand::cmdWheelsRL(String args)
+{
+    args.trim();
+    int speed = args.toInt();
+    if (speed < -127 || speed > 127) {
+        Serial.println("ERR: wheels rl value out of range (-127..127)");
+        return SerialCmd_Error;
+    }
+    if (m_elementRL) {
+        *m_elementRL = (char)speed;
+    }
+    Serial.print("OK wheels rl ");
+    Serial.println(speed);
+    return SerialCmd_Success;
+}
+
+int SerialCommand::cmdWheelsFB(String args)
+{
+    args.trim();
+    int speed = args.toInt();
+    if (speed < -127 || speed > 127) {
+        Serial.println("ERR: wheels fb value out of range (-127..127)");
+        return SerialCmd_Error;
+    }
+    if (m_elementFB) {
+        *m_elementFB = (char)speed;
+    }
+    Serial.print("OK wheels fb ");
     Serial.println(speed);
     return SerialCmd_Success;
 }

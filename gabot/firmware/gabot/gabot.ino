@@ -285,6 +285,7 @@ void setup(void) {
   GabotSerial.setMotors(motorF, motorC, motorH, &motorC_value, &motorH_value);
   GabotSerial.setShoulderPins(motLE, motHE, motLW, motHW,
                                motLU, motHU, motLD, motHD);
+  GabotSerial.setWheelElements(&element[WHEELS_RL], &element[WHEELS_FB]);
 
   // Initialize new modules from GABOT23
   GabotAngle.Init(4);  // direction pin
@@ -614,7 +615,7 @@ void loop(void) {
   }
   if (EL[WHEELS_FB] == HIGH) {  //+forward, -back
     EL[WHEELS_FB] = 0;          //now not used
-  }rl_a
+  }
   if (element[WHEELS_RL] > slow_rl) {  //element[WHEELS_RL]=left/right from joystick
     slow_rl++;                 //value for motors is changing only for small steps
   }

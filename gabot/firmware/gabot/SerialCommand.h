@@ -22,6 +22,7 @@ public:
     void setMotors(Servo& f, Servo& c, Servo& h, byte* valueC, byte* valueH);
     void setShoulderPins(byte lE, byte hE, byte lW, byte hW,
                          byte lU, byte hU, byte lD, byte hD);
+    void setWheelElements(char* elementRL, char* elementFB);
 
     int Process();
 
@@ -34,6 +35,8 @@ private:
     int cmdMotorPos(Servo& motor, byte* valuePtr, int position);
     int cmdShoulderHorizontal(String args);
     int cmdShoulderVertical(String args);
+    int cmdWheelsRL(String args);
+    int cmdWheelsFB(String args);
 
     Fingers& m_fingers;
     Servo* m_motorF;
@@ -44,6 +47,9 @@ private:
 
     byte m_motLE, m_motHE, m_motLW, m_motHW;
     byte m_motLU, m_motHU, m_motLD, m_motHD;
+
+    char* m_elementRL;
+    char* m_elementFB;
 
     String m_buffer;
     int m_verMajor;
