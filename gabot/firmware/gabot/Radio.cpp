@@ -32,9 +32,6 @@ void Radio::Init()
   m_radio.startListening();
 }
 
-extern  word rad_OK_counter;
-extern bool RadioOK;
-
 bool Radio::Available()
 {
   if (!m_ok) return false;
@@ -54,9 +51,7 @@ void Radio::Restart()
     m_radio.openWritingPipe(prijimac);
     m_radio.openReadingPipe(1, vysilac);
     m_radio.startListening();
-    Serial.print("Radio restarted, rad_OK_counter= ");
-    Serial.println(rad_OK_counter);
-    rad_OK_counter = 0;
+    Serial.println("Radio restarted");
 }
 
 bool Radio::IsOk()
