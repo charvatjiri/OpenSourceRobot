@@ -41,10 +41,14 @@ float BatteryMonitor::Update()
     m_voltage = raw / 80.46;  // Assuming 4:1 voltage divider; original formula: (raw * 5.0f / 1023.0f) * 4.0f
     m_batteryOK = m_voltage >= LOW_BATTERY_THRESHOLD;
 
+
     if (m_voltage != m_prev_voltage) {
         if (fabs(m_voltage - m_prev_voltage) > 0.1) {
             return_val = m_voltage;
-        }
+
+            Serial.print("baterry OK: ");
+            Serial.println(m_batteryOK);
+       }
         m_prev_voltage = m_voltage;
     }
 
