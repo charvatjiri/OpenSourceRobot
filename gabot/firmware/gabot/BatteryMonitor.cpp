@@ -26,7 +26,7 @@ void BatteryMonitor::Init(uint8_t voltagePin, uint8_t buzzerPin)
 
     // Initial battery check
     int raw = analogRead(m_voltagePin);
-    m_voltage = (raw * 5.0f / 1023.0f) * 4.0f;  // Assuming 4:1 voltage divider
+    m_prev_voltage = m_voltage = (raw * 5.0f / 1023.0f) * 4.0f;  // Assuming 4:1 voltage divider
     m_batteryOK = m_voltage >= LOW_BATTERY_THRESHOLD;
 
     if (!m_batteryOK) {
@@ -34,11 +34,19 @@ void BatteryMonitor::Init(uint8_t voltagePin, uint8_t buzzerPin)
     }
 }
 
-void BatteryMonitor::Update()
+float BatteryMonitor::Update()
 {
+    float return_val = 0;
     int raw = analogRead(m_voltagePin);
-    m_voltage = (raw * 5.0f / 1023.0f) * 4.0f;  // Assuming 4:1 voltage divider
+    m_voltage = raw / 80.46;  // Assuming 4:1 voltage divider; original formula: (raw * 5.0f / 1023.0f) * 4.0f
     m_batteryOK = m_voltage >= LOW_BATTERY_THRESHOLD;
+
+    if (m_voltage != m_prev_voltage) {
+        if (fabs(m_voltage - m_prev_voltage) > 0.1) {
+            return_val = m_voltage;
+        }
+        m_prev_voltage = m_voltage;
+    }
 
     if (!m_batteryOK) {
         m_buzState = !m_buzState;
@@ -49,6 +57,8 @@ void BatteryMonitor::Update()
             m_buzzCount = 100;
         }
     }
+
+    return return_val;
 }
 
 bool BatteryMonitor::IsBatteryLow()

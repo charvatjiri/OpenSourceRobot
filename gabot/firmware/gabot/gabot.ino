@@ -208,7 +208,12 @@ void loop(void) {
 
     GabotAngle.ReadAngle();
     GabotOvercurrent.Update();
-    GabotBattery.Update();
+    float voltage;
+    if (voltage = GabotBattery.Update()) {
+        Serial.print("baterry voltage = ");
+        Serial.print(voltage);
+        Serial.println(" V");
+    }
     GabotFingers.Update();
   }
 }

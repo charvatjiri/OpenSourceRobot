@@ -10,7 +10,7 @@ public:
     ~BatteryMonitor();
 
     void Init(uint8_t voltagePin, uint8_t buzzerPin);
-    void Update();
+    float Update();
     bool IsBatteryLow();
     float GetVoltage();
 
@@ -20,6 +20,7 @@ private:
     uint8_t m_voltagePin;
     uint8_t m_buzzerPin;
     float m_voltage;
+    float m_prev_voltage;
     bool m_batteryOK;
     bool m_buzState;
     uint16_t m_buzzCount;
