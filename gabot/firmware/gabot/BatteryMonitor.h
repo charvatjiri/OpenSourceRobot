@@ -16,6 +16,7 @@ public:
 
 private:
     static const float LOW_BATTERY_THRESHOLD;  // 10V
+    static const float BATTERY_CHANGE_THRESHOLD;
 
     uint8_t m_voltagePin;
     uint8_t m_buzzerPin;
