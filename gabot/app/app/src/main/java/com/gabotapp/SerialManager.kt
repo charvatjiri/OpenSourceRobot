@@ -21,7 +21,7 @@ class SerialManager(private val context: Context) : SerialInterface, SerialInput
 
     companion object {
         private const val ACTION_USB_PERMISSION = "com.gabotapp.USB_PERMISSION"
-        const val DEFAULT_BAUD_RATE = 9600
+        const val BAUD_RATE = 115200
     }
 
     private val usbManager: UsbManager = context.getSystemService(Context.USB_SERVICE) as UsbManager
@@ -29,8 +29,6 @@ class SerialManager(private val context: Context) : SerialInterface, SerialInput
     private var connection: UsbDeviceConnection? = null
     private var ioManager: SerialInputOutputManager? = null
     private var availableDrivers = listOf<UsbSerialDriver>()
-    private var pendingBaudRate: Int = DEFAULT_BAUD_RATE
-
     override var listener: SerialInterface.SerialListener? = null
     override var isConnected: Boolean = false
         private set
@@ -41,7 +39,7 @@ class SerialManager(private val context: Context) : SerialInterface, SerialInput
                 synchronized(this) {
                     val device = IntentCompat.getParcelableExtra(intent, UsbManager.EXTRA_DEVICE, UsbDevice::class.java)
                     if (intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)) {
-                        device?.let { connectToDevice(it, null, pendingBaudRate) }
+                        device?.let { connectToDevice(it) }
                     } else {
                         listener?.onError("USB permission denied")
                     }
@@ -71,16 +69,15 @@ class SerialManager(private val context: Context) : SerialInterface, SerialInput
         }
     }
 
-    override fun connect(deviceIndex: Int, baudRate: Int) {
+    override fun connect(deviceIndex: Int) {
         if (deviceIndex < 0 || deviceIndex >= availableDrivers.size) {
             listener?.onError("Invalid device index")
             return
         }
         val driver = availableDrivers[deviceIndex]
         val device = driver.device
-        pendingBaudRate = baudRate
         if (usbManager.hasPermission(device)) {
-            connectToDevice(device, driver, baudRate)
+            connectToDevice(device, driver)
         } else {
             requestPermission(device)
         }
@@ -98,7 +95,7 @@ class SerialManager(private val context: Context) : SerialInterface, SerialInput
         usbManager.requestPermission(device, permissionIntent)
     }
 
-    private fun connectToDevice(device: UsbDevice, driver: UsbSerialDriver? = null, baudRate: Int = DEFAULT_BAUD_RATE) {
+    private fun connectToDevice(device: UsbDevice, driver: UsbSerialDriver? = null) {
         try {
             val actualDriver = driver ?: UsbSerialProber.getDefaultProber().probeDevice(device)
             if (actualDriver == null) {
@@ -114,7 +111,7 @@ class SerialManager(private val context: Context) : SerialInterface, SerialInput
 
             serialPort = actualDriver.ports[0]
             serialPort?.open(connection)
-            serialPort?.setParameters(baudRate, 8, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_NONE)
+            serialPort?.setParameters(BAUD_RATE, 8, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_NONE)
 
             ioManager = SerialInputOutputManager(serialPort, this)
             Executors.newSingleThreadExecutor().submit(ioManager)

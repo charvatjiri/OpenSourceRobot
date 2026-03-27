@@ -5,7 +5,7 @@ interface SerialInterface {
     val isConnected: Boolean
 
     fun findDevices(): List<DeviceInfo>
-    fun connect(deviceIndex: Int, baudRate: Int)
+    fun connect(deviceIndex: Int)
     fun send(data: String)
     fun sendBytes(data: ByteArray)
     fun disconnect()
