@@ -15,9 +15,16 @@ import androidx.appcompat.app.AppCompatActivity
 
 class MainActivity : AppCompatActivity(), SerialInterface.SerialListener {
 
+    companion object {
+        val MAJOR_VER = BuildConfig.MAJOR_VER
+        val MINOR_VER = BuildConfig.MINOR_VER
+        val MICRO_VER = BuildConfig.MICRO_VER
+    }
+
     private var serialManager: SerialInterface? = null
     private lateinit var deviceSpinner: Spinner
     private lateinit var connectButton: Button
+    private lateinit var disconnectButton: Button
     private lateinit var refreshButton: Button
     private lateinit var sendButton: Button
     private lateinit var clearButton: Button
@@ -43,6 +50,7 @@ class MainActivity : AppCompatActivity(), SerialInterface.SerialListener {
     private fun initViews() {
         deviceSpinner = findViewById(R.id.deviceSpinner)
         connectButton = findViewById(R.id.connectButton)
+        disconnectButton = findViewById(R.id.disconnectButton)
         refreshButton = findViewById(R.id.refreshButton)
         sendButton = findViewById(R.id.sendButton)
         clearButton = findViewById(R.id.clearButton)
@@ -51,6 +59,7 @@ class MainActivity : AppCompatActivity(), SerialInterface.SerialListener {
         statusText = findViewById(R.id.statusText)
 
         connectButton.setOnClickListener { connect() }
+        disconnectButton.setOnClickListener { disconnect() }
         refreshButton.setOnClickListener { refreshDevices() }
         sendButton.setOnClickListener { sendMessage() }
         clearButton.setOnClickListener { clearLog() }
@@ -131,6 +140,7 @@ class MainActivity : AppCompatActivity(), SerialInterface.SerialListener {
     private fun updateConnectionUI(connected: Boolean) {
         runOnUiThread {
             connectButton.visibility = if (connected) View.GONE else View.VISIBLE
+            disconnectButton.visibility = if (connected) View.VISIBLE else View.GONE
             deviceSpinner.isEnabled = !connected
             refreshButton.isEnabled = !connected
             sendButton.isEnabled = connected
