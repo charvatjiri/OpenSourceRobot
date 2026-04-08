@@ -22,7 +22,9 @@
             style="@style/Widget.Material3.Button.TonalButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="@string/refresh" />
+            android:text="@string/refresh"
+            android:textSize="18sp"
+            android:textColor="#FFFFFF" />
 
         <Button
             android:id="@+id/connectButton"
@@ -47,7 +49,7 @@
             android:layout_marginBottom="10dp"
             android:text="@string/status_disconnected"
             android:textColor="@android:color/holo_red_dark"
-            android:textSize="20sp"
+            android:textSize="18sp"
             app:layout_constraintStart_toEndOf="@+id/connectButton" />
 
     </LinearLayout>
@@ -94,23 +96,15 @@
         android:layout_width="0dp"
         android:layout_height="0dp"
         android:layout_marginTop="4dp"
-        android:layout_marginBottom="4dp"
         android:background="@android:color/darker_gray"
         android:divider="@android:color/transparent"
         android:dividerHeight="2dp"
         android:padding="8dp"
-        app:layout_constraintBottom_toTopOf="@id/clearButton"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/inputLayout" />
-
-    <Button
-        android:id="@+id/clearButton"
-        style="@style/Widget.Material3.Button.TextButton"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="@string/clear_log"
         app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintStart_toStartOf="parent" />
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.0"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/inputLayout"
+        app:layout_constraintVertical_bias="0.0" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

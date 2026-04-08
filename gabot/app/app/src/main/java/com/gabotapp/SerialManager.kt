@@ -15,6 +15,7 @@ import com.hoho.android.usbserial.driver.UsbSerialPort
 import com.hoho.android.usbserial.driver.UsbSerialProber
 import com.hoho.android.usbserial.util.SerialInputOutputManager
 import java.io.IOException
+import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
 class SerialManager(private val context: Context) : SerialInterface, SerialInputOutputManager.Listener {
@@ -28,18 +29,22 @@ class SerialManager(private val context: Context) : SerialInterface, SerialInput
     private var serialPort: UsbSerialPort? = null
     private var connection: UsbDeviceConnection? = null
     private var ioManager: SerialInputOutputManager? = null
+    private val ioExecutor: ExecutorService = Executors.newSingleThreadExecutor()
     private var availableDrivers = listOf<UsbSerialDriver>()
     override var listener: SerialInterface.SerialListener? = null
     override var isConnected: Boolean = false
         private set
+    private var isConnecting: Boolean = false
 
     private val usbReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             if (ACTION_USB_PERMISSION == intent.action) {
                 synchronized(this) {
                     val device = IntentCompat.getParcelableExtra(intent, UsbManager.EXTRA_DEVICE, UsbDevice::class.java)
-                    if (intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)) {
-                        device?.let { connectToDevice(it) }
+                    if (device == null) {
+                        listener?.onError("USB permission response missing device")
+                    } else if (intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)) {
+                        connectToDevice(device)
                     } else {
                         listener?.onError("USB permission denied")
                     }
@@ -74,6 +79,10 @@ class SerialManager(private val context: Context) : SerialInterface, SerialInput
             listener?.onError("Invalid device index")
             return
         }
+        if (isConnected || isConnecting) {
+            listener?.onError("Connection already in progress")
+            return
+        }
         val driver = availableDrivers[deviceIndex]
         val device = driver.device
         if (usbManager.hasPermission(device)) {
@@ -85,43 +94,61 @@ class SerialManager(private val context: Context) : SerialInterface, SerialInput
 
     private fun requestPermission(device: UsbDevice) {
         val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            PendingIntent.FLAG_MUTABLE
+            PendingIntent.FLAG_MUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         } else {
-            0
+            PendingIntent.FLAG_UPDATE_CURRENT
         }
+        val permissionIntentValue = Intent(ACTION_USB_PERMISSION).setPackage(context.packageName)
         val permissionIntent = PendingIntent.getBroadcast(
-            context, 0, Intent(ACTION_USB_PERMISSION), flags
+            context, 0, permissionIntentValue, flags
         )
-        usbManager.requestPermission(device, permissionIntent)
+        try {
+            usbManager.requestPermission(device, permissionIntent)
+        } catch (e: Exception) {
+            isConnecting = false
+            listener?.onError("Permission request failed: ${e.message ?: e.javaClass.simpleName}")
+        }
     }
 
     private fun connectToDevice(device: UsbDevice, driver: UsbSerialDriver? = null) {
+        isConnecting = true
         try {
             val actualDriver = driver ?: UsbSerialProber.getDefaultProber().probeDevice(device)
             if (actualDriver == null) {
                 listener?.onError("No driver for device")
                 return
             }
-
-            connection = usbManager.openDevice(device)
-            if (connection == null) {
-                listener?.onError("Could not open connection")
+            if (actualDriver.ports.isEmpty()) {
+                listener?.onError("Device has no serial ports")
                 return
             }
 
-            serialPort = actualDriver.ports[0]
-            serialPort?.open(connection)
-            serialPort?.setParameters(BAUD_RATE, 8, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_NONE)
+            cleanupConnection(notifyListener = false)
 
-            ioManager = SerialInputOutputManager(serialPort, this)
-            Executors.newSingleThreadExecutor().submit(ioManager)
+            val openedConnection = usbManager.openDevice(device)
+            if (openedConnection == null) {
+                listener?.onError("Could not open connection")
+                return
+            }
+            connection = openedConnection
+
+            val openedPort = actualDriver.ports.first()
+            openedPort.open(openedConnection)
+            openedPort.setParameters(BAUD_RATE, 8, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_NONE)
+            serialPort = openedPort
+
+            val newIoManager = SerialInputOutputManager(openedPort, this)
+            ioManager = newIoManager
+            ioExecutor.submit(newIoManager)
 
             isConnected = true
             listener?.onConnectionStateChanged(true)
 
-        } catch (e: IOException) {
-            listener?.onError("Connection failed: ${e.message}")
-            disconnect()
+        } catch (e: Exception) {
+            listener?.onError("Connection failed: ${e.message ?: e.javaClass.simpleName}")
+            cleanupConnection(notifyListener = false)
+        } finally {
+            isConnecting = false
         }
     }
 
@@ -132,8 +159,8 @@ class SerialManager(private val context: Context) : SerialInterface, SerialInput
         }
         try {
             serialPort?.write(data.toByteArray(), 1000)
-        } catch (e: IOException) {
-            listener?.onError("Send failed: ${e.message}")
+        } catch (e: Exception) {
+            listener?.onError("Send failed: ${e.message ?: e.javaClass.simpleName}")
         }
     }
 
@@ -144,12 +171,16 @@ class SerialManager(private val context: Context) : SerialInterface, SerialInput
         }
         try {
             serialPort?.write(data, 1000)
-        } catch (e: IOException) {
-            listener?.onError("Send failed: ${e.message}")
+        } catch (e: Exception) {
+            listener?.onError("Send failed: ${e.message ?: e.javaClass.simpleName}")
         }
     }
 
     override fun disconnect() {
+        cleanupConnection(notifyListener = true)
+    }
+
+    private fun cleanupConnection(notifyListener: Boolean) {
         ioManager?.listener = null
         ioManager?.stop()
         ioManager = null
@@ -162,12 +193,16 @@ class SerialManager(private val context: Context) : SerialInterface, SerialInput
         connection?.close()
         connection = null
 
+        isConnecting = false
         isConnected = false
-        listener?.onConnectionStateChanged(false)
+        if (notifyListener) {
+            listener?.onConnectionStateChanged(false)
+        }
     }
 
     override fun destroy() {
         disconnect()
+        ioExecutor.shutdownNow()
         try {
             context.unregisterReceiver(usbReceiver)
         } catch (_: IllegalArgumentException) {}

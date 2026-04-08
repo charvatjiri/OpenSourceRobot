@@ -27,7 +27,6 @@ class MainActivity : AppCompatActivity(), SerialInterface.SerialListener {
     private lateinit var disconnectButton: Button
     private lateinit var refreshButton: Button
     private lateinit var sendButton: Button
-    private lateinit var clearButton: Button
     private lateinit var messageInput: EditText
     private lateinit var logListView: ListView
     private lateinit var statusText: TextView
@@ -35,6 +34,7 @@ class MainActivity : AppCompatActivity(), SerialInterface.SerialListener {
     private val logMessages = mutableListOf<String>()
     private lateinit var logAdapter: ArrayAdapter<String>
     private var availableDevices = listOf<SerialInterface.DeviceInfo>()
+    private var isConnecting = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -53,7 +53,6 @@ class MainActivity : AppCompatActivity(), SerialInterface.SerialListener {
         disconnectButton = findViewById(R.id.disconnectButton)
         refreshButton = findViewById(R.id.refreshButton)
         sendButton = findViewById(R.id.sendButton)
-        clearButton = findViewById(R.id.clearButton)
         messageInput = findViewById(R.id.messageInput)
         logListView = findViewById(R.id.logListView)
         statusText = findViewById(R.id.statusText)
@@ -62,7 +61,6 @@ class MainActivity : AppCompatActivity(), SerialInterface.SerialListener {
         disconnectButton.setOnClickListener { disconnect() }
         refreshButton.setOnClickListener { refreshDevices() }
         sendButton.setOnClickListener { sendMessage() }
-        clearButton.setOnClickListener { clearLog() }
 
         updateConnectionUI(false)
     }
@@ -104,10 +102,13 @@ class MainActivity : AppCompatActivity(), SerialInterface.SerialListener {
         }
 
         addLog("Connecting at ${SerialManager.BAUD_RATE} baud...")
+        isConnecting = true
+        connectButton.isEnabled = false
         serialManager?.connect(selectedIndex)
     }
 
     private fun disconnect() {
+        isConnecting = false
         serialManager?.disconnect()
         addLog("Disconnected")
     }
@@ -141,8 +142,9 @@ class MainActivity : AppCompatActivity(), SerialInterface.SerialListener {
         runOnUiThread {
             connectButton.visibility = if (connected) View.GONE else View.VISIBLE
             disconnectButton.visibility = if (connected) View.VISIBLE else View.GONE
-            deviceSpinner.isEnabled = !connected
-            refreshButton.isEnabled = !connected
+            connectButton.isEnabled = !isConnecting && availableDevices.isNotEmpty()
+            deviceSpinner.isEnabled = !connected && !isConnecting
+            refreshButton.isEnabled = !connected && !isConnecting
             sendButton.isEnabled = connected
             messageInput.isEnabled = connected
 
@@ -171,11 +173,14 @@ class MainActivity : AppCompatActivity(), SerialInterface.SerialListener {
     }
 
     override fun onConnectionStateChanged(connected: Boolean) {
+        isConnecting = false
         updateConnectionUI(connected)
         addLog(if (connected) "Connected successfully" else "Connection closed")
     }
 
     override fun onError(message: String) {
+        isConnecting = false
+        updateConnectionUI(serialManager?.isConnected == true)
         addLog("Error: $message")
         runOnUiThread {
             Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
