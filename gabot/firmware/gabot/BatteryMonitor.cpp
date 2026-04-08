@@ -2,6 +2,7 @@
 #include "BatteryMonitor.h"
 
 const float BatteryMonitor::LOW_BATTERY_THRESHOLD = 10.0f;
+const float BatteryMonitor::BATTERY_CHANGE_THRESHOLD = 0.2f;
 
 BatteryMonitor::BatteryMonitor()
     : m_voltagePin(A0)
@@ -26,7 +27,7 @@ void BatteryMonitor::Init(uint8_t voltagePin, uint8_t buzzerPin)
 
     // Initial battery check
     int raw = analogRead(m_voltagePin);
-    m_prev_voltage = m_voltage = (raw * 5.0f / 1023.0f) * 4.0f;  // Assuming 4:1 voltage divider
+    m_prev_voltage = m_voltage = raw / 80.46; // (raw * 5.0f / 1023.0f) * 4.0f;  // Assuming 4:1 voltage divider
     m_batteryOK = m_voltage >= LOW_BATTERY_THRESHOLD;
 
     if (!m_batteryOK) {
@@ -38,13 +39,17 @@ float BatteryMonitor::Update()
 {
     float return_val = 0;
     int raw = analogRead(m_voltagePin);
-    m_voltage = raw / 80.46;  // Assuming 4:1 voltage divider; original formula: (raw * 5.0f / 1023.0f) * 4.0f
+    m_voltage = raw / 80.46; // Assuming 4:1 voltage divider; original formula: (raw * 5.0f / 1023.0f) * 4.0f
     m_batteryOK = m_voltage >= LOW_BATTERY_THRESHOLD;
 
+
     if (m_voltage != m_prev_voltage) {
-        if (fabs(m_voltage - m_prev_voltage) > 0.1) {
+        if (fabs(m_voltage - m_prev_voltage) >= BATTERY_CHANGE_THRESHOLD) {
             return_val = m_voltage;
-        }
+
+            Serial.print("baterry OK: ");
+            Serial.println(m_batteryOK);
+       }
         m_prev_voltage = m_voltage;
     }
 

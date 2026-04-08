@@ -12,30 +12,29 @@ import android.widget.Spinner
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import com.google.android.material.switchmaterial.SwitchMaterial
 
 class MainActivity : AppCompatActivity(), SerialInterface.SerialListener {
 
+    companion object {
+        val MAJOR_VER = BuildConfig.MAJOR_VER
+        val MINOR_VER = BuildConfig.MINOR_VER
+        val MICRO_VER = BuildConfig.MICRO_VER
+    }
+
     private var serialManager: SerialInterface? = null
     private lateinit var deviceSpinner: Spinner
-    private lateinit var baudRateSpinner: Spinner
     private lateinit var connectButton: Button
     private lateinit var disconnectButton: Button
     private lateinit var refreshButton: Button
     private lateinit var sendButton: Button
-    private lateinit var clearButton: Button
     private lateinit var messageInput: EditText
     private lateinit var logListView: ListView
     private lateinit var statusText: TextView
-    private lateinit var simulationSwitch: SwitchMaterial
 
     private val logMessages = mutableListOf<String>()
     private lateinit var logAdapter: ArrayAdapter<String>
     private var availableDevices = listOf<SerialInterface.DeviceInfo>()
-
-    private val baudRates = listOf(9600, 19200, 38400, 57600, 115200)
-
-    private var isSimulationMode = false
+    private var isConnecting = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -50,42 +49,25 @@ class MainActivity : AppCompatActivity(), SerialInterface.SerialListener {
 
     private fun initViews() {
         deviceSpinner = findViewById(R.id.deviceSpinner)
-        baudRateSpinner = findViewById(R.id.baudRateSpinner)
         connectButton = findViewById(R.id.connectButton)
         disconnectButton = findViewById(R.id.disconnectButton)
         refreshButton = findViewById(R.id.refreshButton)
         sendButton = findViewById(R.id.sendButton)
-        clearButton = findViewById(R.id.clearButton)
         messageInput = findViewById(R.id.messageInput)
         logListView = findViewById(R.id.logListView)
         statusText = findViewById(R.id.statusText)
-        simulationSwitch = findViewById(R.id.simulationSwitch)
 
         connectButton.setOnClickListener { connect() }
         disconnectButton.setOnClickListener { disconnect() }
         refreshButton.setOnClickListener { refreshDevices() }
         sendButton.setOnClickListener { sendMessage() }
-        clearButton.setOnClickListener { clearLog() }
-
-        simulationSwitch.setOnCheckedChangeListener { _, isChecked ->
-            if (serialManager?.isConnected == true) {
-                serialManager?.disconnect()
-            }
-            isSimulationMode = isChecked
-            initSerialManager()
-            addLog(if (isChecked) "Simulation mode enabled" else "Hardware mode enabled")
-        }
 
         updateConnectionUI(false)
     }
 
     private fun initSerialManager() {
         serialManager?.destroy()
-        serialManager = if (isSimulationMode) {
-            MockSerialManager()
-        } else {
-            SerialManager(this)
-        }
+        serialManager = SerialManager(this)
         serialManager?.listener = this
         refreshDevices()
     }
@@ -93,10 +75,6 @@ class MainActivity : AppCompatActivity(), SerialInterface.SerialListener {
     private fun setupAdapters() {
         logAdapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, logMessages)
         logListView.adapter = logAdapter
-
-        val baudAdapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, baudRates)
-        baudAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-        baudRateSpinner.adapter = baudAdapter
     }
 
     private fun refreshDevices() {
@@ -123,12 +101,14 @@ class MainActivity : AppCompatActivity(), SerialInterface.SerialListener {
             return
         }
 
-        val baudRate = baudRates[baudRateSpinner.selectedItemPosition]
-        addLog("Connecting at $baudRate baud...")
-        serialManager?.connect(selectedIndex, baudRate)
+        addLog("Connecting at ${SerialManager.BAUD_RATE} baud...")
+        isConnecting = true
+        connectButton.isEnabled = false
+        serialManager?.connect(selectedIndex)
     }
 
     private fun disconnect() {
+        isConnecting = false
         serialManager?.disconnect()
         addLog("Disconnected")
     }
@@ -162,10 +142,9 @@ class MainActivity : AppCompatActivity(), SerialInterface.SerialListener {
         runOnUiThread {
             connectButton.visibility = if (connected) View.GONE else View.VISIBLE
             disconnectButton.visibility = if (connected) View.VISIBLE else View.GONE
-            deviceSpinner.isEnabled = !connected
-            baudRateSpinner.isEnabled = !connected
-            refreshButton.isEnabled = !connected
-            simulationSwitch.isEnabled = !connected
+            connectButton.isEnabled = !isConnecting && availableDevices.isNotEmpty()
+            deviceSpinner.isEnabled = !connected && !isConnecting
+            refreshButton.isEnabled = !connected && !isConnecting
             sendButton.isEnabled = connected
             messageInput.isEnabled = connected
 
@@ -185,9 +164,7 @@ class MainActivity : AppCompatActivity(), SerialInterface.SerialListener {
     private fun handleIntent(intent: Intent) {
         if (UsbManager.ACTION_USB_DEVICE_ATTACHED == intent.action) {
             addLog("USB device attached")
-            if (!isSimulationMode) {
-                refreshDevices()
-            }
+            refreshDevices()
         }
     }
 
@@ -196,11 +173,14 @@ class MainActivity : AppCompatActivity(), SerialInterface.SerialListener {
     }
 
     override fun onConnectionStateChanged(connected: Boolean) {
+        isConnecting = false
         updateConnectionUI(connected)
         addLog(if (connected) "Connected successfully" else "Connection closed")
     }
 
     override fun onError(message: String) {
+        isConnecting = false
+        updateConnectionUI(serialManager?.isConnected == true)
         addLog("Error: $message")
         runOnUiThread {
             Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
