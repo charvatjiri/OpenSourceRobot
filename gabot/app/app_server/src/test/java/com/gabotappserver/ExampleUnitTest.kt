@@ -1,4 +1,4 @@
-package com.gabotapp
+package com.gabotappserver
 
 import org.junit.Test
 

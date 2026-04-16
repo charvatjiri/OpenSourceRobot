@@ -1,6 +1,9 @@
-package com.gabotapp
+package com.gabotappserver
 
+import android.Manifest
+import android.bluetooth.BluetoothAdapter
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.hardware.usb.UsbManager
 import android.os.Bundle
 import android.view.View
@@ -11,9 +14,11 @@ import android.widget.ListView
 import android.widget.Spinner
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 
-class MainActivity : AppCompatActivity(), SerialInterface.SerialListener {
+class MainActivity : AppCompatActivity(), SerialInterface.SerialListener, BluetoothServerManager.Listener {
 
     companion object {
         val MAJOR_VER = BuildConfig.MAJOR_VER
@@ -22,11 +27,13 @@ class MainActivity : AppCompatActivity(), SerialInterface.SerialListener {
     }
 
     private var serialManager: SerialInterface? = null
+    private lateinit var bluetoothServerManager: BluetoothServerManager
     private lateinit var deviceSpinner: Spinner
     private lateinit var connectButton: Button
     private lateinit var disconnectButton: Button
     private lateinit var refreshButton: Button
     private lateinit var sendButton: Button
+    private lateinit var clearButton: Button
     private lateinit var messageInput: EditText
     private lateinit var logListView: ListView
     private lateinit var statusText: TextView
@@ -35,6 +42,27 @@ class MainActivity : AppCompatActivity(), SerialInterface.SerialListener {
     private lateinit var logAdapter: ArrayAdapter<String>
     private var availableDevices = listOf<SerialInterface.DeviceInfo>()
     private var isConnecting = false
+    private val serialReceiveBuffer = StringBuilder()
+
+    private val bluetoothPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            ensureBluetoothServerRunning()
+        } else {
+            addLog("Bluetooth permission denied")
+        }
+    }
+
+    private val bluetoothEnableLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) {
+        if (bluetoothServerManager.isBluetoothEnabled()) {
+            ensureBluetoothServerRunning()
+        } else {
+            addLog("Bluetooth enable request was declined")
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -43,6 +71,7 @@ class MainActivity : AppCompatActivity(), SerialInterface.SerialListener {
         initViews()
         setupAdapters()
         initSerialManager()
+        initBluetoothServer()
 
         handleIntent(intent)
     }
@@ -53,6 +82,7 @@ class MainActivity : AppCompatActivity(), SerialInterface.SerialListener {
         disconnectButton = findViewById(R.id.disconnectButton)
         refreshButton = findViewById(R.id.refreshButton)
         sendButton = findViewById(R.id.sendButton)
+        clearButton = findViewById(R.id.clearButton)
         messageInput = findViewById(R.id.messageInput)
         logListView = findViewById(R.id.logListView)
         statusText = findViewById(R.id.statusText)
@@ -61,6 +91,7 @@ class MainActivity : AppCompatActivity(), SerialInterface.SerialListener {
         disconnectButton.setOnClickListener { disconnect() }
         refreshButton.setOnClickListener { refreshDevices() }
         sendButton.setOnClickListener { sendMessage() }
+        clearButton.setOnClickListener { clearLog() }
 
         updateConnectionUI(false)
     }
@@ -70,6 +101,40 @@ class MainActivity : AppCompatActivity(), SerialInterface.SerialListener {
         serialManager = SerialManager(this)
         serialManager?.listener = this
         refreshDevices()
+    }
+
+    private fun initBluetoothServer() {
+        bluetoothServerManager = BluetoothServerManager(this)
+        bluetoothServerManager.listener = this
+        ensureBluetoothServerRunning()
+    }
+
+    private fun ensureBluetoothServerRunning() {
+        if (!bluetoothServerManager.isBluetoothSupported()) {
+            addLog("Bluetooth is not supported on this device")
+            return
+        }
+
+        if (!hasBluetoothPermission()) {
+            bluetoothPermissionLauncher.launch(Manifest.permission.BLUETOOTH_CONNECT)
+            return
+        }
+
+        if (!bluetoothServerManager.isBluetoothEnabled()) {
+            addLog("Bluetooth is disabled, requesting enable")
+            bluetoothEnableLauncher.launch(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE))
+            return
+        }
+
+        bluetoothServerManager.start()
+    }
+
+    private fun hasBluetoothPermission(): Boolean {
+        return android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.S ||
+            ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.BLUETOOTH_CONNECT
+            ) == PackageManager.PERMISSION_GRANTED
     }
 
     private fun setupAdapters() {
@@ -90,7 +155,7 @@ class MainActivity : AppCompatActivity(), SerialInterface.SerialListener {
             connectButton.isEnabled = false
         } else {
             addLog("Found ${availableDevices.size} device(s)")
-            connectButton.isEnabled = true
+            connectButton.isEnabled = !isConnecting
         }
     }
 
@@ -170,11 +235,16 @@ class MainActivity : AppCompatActivity(), SerialInterface.SerialListener {
 
     override fun onDataReceived(data: String) {
         addLog("RX: $data")
+        forwardSerialDataToBluetooth(data)
     }
 
     override fun onConnectionStateChanged(connected: Boolean) {
         isConnecting = false
         updateConnectionUI(connected)
+        if (!connected) {
+            serialReceiveBuffer.setLength(0)
+        }
+        sendBluetoothInfo(if (connected) "serial connected" else "serial disconnected")
         addLog(if (connected) "Connected successfully" else "Connection closed")
     }
 
@@ -182,13 +252,64 @@ class MainActivity : AppCompatActivity(), SerialInterface.SerialListener {
         isConnecting = false
         updateConnectionUI(serialManager?.isConnected == true)
         addLog("Error: $message")
+        bluetoothServerManager.sendLine("ERR: $message")
         runOnUiThread {
             Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
         }
     }
 
     override fun onDestroy() {
+        bluetoothServerManager.stop()
         serialManager?.destroy()
         super.onDestroy()
+    }
+
+    override fun onServerStarted() {
+        addLog("Bluetooth server listening: ${BluetoothServerManager.SERVICE_NAME}")
+    }
+
+    override fun onClientConnected(name: String) {
+        addLog("Bluetooth client connected: $name")
+        val serialState = if (serialManager?.isConnected == true) "connected" else "disconnected"
+        bluetoothServerManager.sendLine("INFO: bluetooth client connected")
+        bluetoothServerManager.sendLine("INFO: serial $serialState")
+    }
+
+    override fun onClientDisconnected() {
+        addLog("Bluetooth client disconnected")
+    }
+
+    override fun onMessageReceived(message: String) {
+        addLog("BT RX: $message")
+
+        val manager = serialManager
+        if (manager == null || !manager.isConnected) {
+            addLog("BT message ignored, serial is disconnected")
+            bluetoothServerManager.sendLine("ERR: serial disconnected")
+            return
+        }
+
+        manager.send("$message\n")
+        addLog("BT→Serial: $message")
+    }
+
+    private fun forwardSerialDataToBluetooth(data: String) {
+        if (!bluetoothServerManager.hasClientConnection()) {
+            return
+        }
+
+        serialReceiveBuffer.append(data)
+        var newlineIndex = serialReceiveBuffer.indexOf("\n")
+        while (newlineIndex >= 0) {
+            val line = serialReceiveBuffer.substring(0, newlineIndex).trimEnd('\r')
+            serialReceiveBuffer.delete(0, newlineIndex + 1)
+            bluetoothServerManager.sendLine(line)
+            addLog("Serial→BT: $line")
+            newlineIndex = serialReceiveBuffer.indexOf("\n")
+        }
+    }
+
+    private fun sendBluetoothInfo(message: String) {
+        bluetoothServerManager.sendLine("INFO: $message")
     }
 }

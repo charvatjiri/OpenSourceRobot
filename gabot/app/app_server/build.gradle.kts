@@ -4,15 +4,15 @@ plugins {
 }
 
 val majorVer = 0
-val minorVer = 2
-val microVer = 8
+val minorVer = 3
+val microVer = 0
 
 android {
-    namespace = "com.gabotapp"
+    namespace = "com.gabotappserver"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.gabotapp"
+        applicationId = "com.gabotappserver"
         minSdk = 24
         targetSdk = 36
         versionCode = majorVer * 10000 + minorVer * 100 + microVer
@@ -50,7 +50,7 @@ android {
         val variant = this
         outputs.all {
             val output = this as com.android.build.gradle.internal.api.BaseVariantOutputImpl
-            output.outputFileName = "GabotApp-$majorVer.$minorVer.$microVer-${variant.buildType.name}.apk"
+            output.outputFileName = "GabotAppServer-$majorVer.$minorVer.$microVer-${variant.buildType.name}.apk"
         }
     }
 }
