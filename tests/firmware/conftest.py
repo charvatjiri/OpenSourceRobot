@@ -24,9 +24,8 @@ NOISE_PREFIXES = (
     "AS5600 angle sensor not found",
 )
 SERVO_DEFAULTS = {
-    "motor_f": ("motor f 90", "OK motor 90"),
-    "wrist_horizontal": ("wrist horizontal 83", "OK motor 83"),
-    "wrist_vertical": ("wrist vertical 83", "OK motor 83"),
+    "wrist_horizontal": ("wrist horizontal 80", "OK motor 80"),
+    "wrist_vertical": ("wrist vertical 100", "OK motor 100"),
 }
 TEST_FILE_ORDER = {
     "test_protocol.py": 0,
@@ -185,13 +184,6 @@ def serial_session(
 
 
 @pytest.fixture
-def motor_f_servo(serial_session: SerialProtocolSession):
-    _restore_command(serial_session, *SERVO_DEFAULTS["motor_f"])
-    yield serial_session
-    _restore_command(serial_session, *SERVO_DEFAULTS["motor_f"])
-
-
-@pytest.fixture
 def wrist_horizontal_servo(serial_session: SerialProtocolSession):
     _restore_command(serial_session, *SERVO_DEFAULTS["wrist_horizontal"])
     yield serial_session
@@ -232,4 +224,4 @@ def wheels_fb_motor(serial_session: SerialProtocolSession):
 @pytest.fixture(autouse=True)
 def inter_test_delay():
     yield
-    time.sleep(10)
+    time.sleep(3)

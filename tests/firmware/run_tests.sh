@@ -52,7 +52,11 @@ main() {
         exit 1
     fi
 
-    exec python3 -m pytest tests/firmware "$@"
+    exec python3 -m pytest \
+        --rootdir="${ROOT_DIR}" \
+        -o cache_dir="${ROOT_DIR}/.pytest_cache" \
+        tests/firmware \
+        "$@"
 }
 
 main "$@"

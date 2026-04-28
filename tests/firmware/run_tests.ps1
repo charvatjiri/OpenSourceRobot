@@ -51,6 +51,13 @@ if (-not (Test-PythonModules -PythonCmd $pythonCmd)) {
     throw "Python still cannot import pytest and serial after installation."
 }
 
-$pytestArgs = $pythonCmd + @("-m", "pytest", (Join-Path $RootDir "tests/firmware")) + $args
+$pytestArgs = $pythonCmd + @(
+    "-m",
+    "pytest",
+    "--rootdir=$RootDir",
+    "-o",
+    "cache_dir=$(Join-Path $RootDir '.pytest_cache')",
+    (Join-Path $RootDir "tests/firmware")
+) + $args
 & $pytestArgs[0] $pytestArgs[1..($pytestArgs.Length - 1)]
 exit $LASTEXITCODE

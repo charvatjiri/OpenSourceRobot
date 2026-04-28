@@ -18,6 +18,8 @@ sudo apt-get update
 sudo apt-get install -y python3 python3-pytest python3-serial
 ```
 
+Pytest cache is stored in `.pytest_cache/` in the repository root.
+
 ## Windows 10 and 11
 
 Use:
@@ -34,6 +36,8 @@ py -3 -m pip install --user pytest pyserial
 ```
 
 If `py` is not available, the script falls back to `python`.
+
+Pytest cache is stored in `.pytest_cache/` in the repository root.
 
 ## Direct Manual Run
 
