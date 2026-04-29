@@ -8,11 +8,11 @@ val minorVer = 3
 val microVer = 0
 
 android {
-    namespace = "com.gabotappserver"
+    namespace = "com.gabotapp"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.gabotappserver"
+        applicationId = "com.gabotapp"
         minSdk = 24
         targetSdk = 36
         versionCode = majorVer * 10000 + minorVer * 100 + microVer
@@ -50,7 +50,7 @@ android {
         val variant = this
         outputs.all {
             val output = this as com.android.build.gradle.internal.api.BaseVariantOutputImpl
-            output.outputFileName = "GabotAppServer-$majorVer.$minorVer.$microVer-${variant.buildType.name}.apk"
+            output.outputFileName = "GabotApp-$majorVer.$minorVer.$microVer-${variant.buildType.name}.apk"
         }
     }
 }

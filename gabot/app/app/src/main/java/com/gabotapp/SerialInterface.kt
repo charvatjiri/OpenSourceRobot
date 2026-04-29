@@ -1,4 +1,4 @@
-package com.gabotappserver
+package com.gabotapp
 
 interface SerialInterface {
     var listener: SerialListener?

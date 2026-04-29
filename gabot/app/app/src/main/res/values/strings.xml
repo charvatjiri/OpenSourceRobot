@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">GabotAppServer</string>
+    <string name="app_name">GabotApp</string>
     <string name="refresh">Refresh</string>
     <string name="baud_rate">Baud Rate:</string>
     <string name="connect">Connect</string>

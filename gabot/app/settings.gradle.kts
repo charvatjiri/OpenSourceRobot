@@ -20,5 +20,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "GabotAppServer"
-include(":app_server")
+rootProject.name = "GabotApp"
+include(":app")

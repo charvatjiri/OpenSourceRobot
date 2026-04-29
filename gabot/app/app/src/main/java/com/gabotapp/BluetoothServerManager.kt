@@ -1,4 +1,4 @@
-package com.gabotappserver
+package com.gabotapp
 
 import android.Manifest
 import android.bluetooth.BluetoothAdapter
@@ -24,7 +24,7 @@ class BluetoothServerManager(context: Context) {
     }
 
     companion object {
-        const val SERVICE_NAME = "GabotAppServer"
+        const val SERVICE_NAME = "GabotApp"
         val SERVICE_UUID: UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
     }
 

@@ -1,4 +1,4 @@
-package com.gabotappserver
+package com.gabotapp
 
 import android.Manifest
 import android.bluetooth.BluetoothAdapter

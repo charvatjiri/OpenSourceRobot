@@ -1,4 +1,4 @@
-package com.gabotappserver
+package com.gabotapp
 
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
@@ -21,7 +21,7 @@ import java.util.concurrent.Executors
 class SerialManager(private val context: Context) : SerialInterface, SerialInputOutputManager.Listener {
 
     companion object {
-        private const val ACTION_USB_PERMISSION = "com.gabotappserver.USB_PERMISSION"
+        private const val ACTION_USB_PERMISSION = "com.gabotapp.USB_PERMISSION"
         const val BAUD_RATE = 115200
     }
 
