@@ -24,6 +24,7 @@ class MainActivity : AppCompatActivity(), SerialInterface.SerialListener, Blueto
         val MAJOR_VER = BuildConfig.MAJOR_VER
         val MINOR_VER = BuildConfig.MINOR_VER
         val MICRO_VER = BuildConfig.MICRO_VER
+        private const val SERIAL_COMMAND_TERMINATOR = "\n"
     }
 
     private var serialManager: SerialInterface? = null
@@ -185,8 +186,9 @@ class MainActivity : AppCompatActivity(), SerialInterface.SerialListener, Blueto
             return
         }
 
-        serialManager?.send(message + "\n")
-        addLog("TX: $message")
+        if (!sendSerialCommand(message, source = "UI")) {
+            return
+        }
         messageInput.text.clear()
     }
 
@@ -281,16 +283,35 @@ class MainActivity : AppCompatActivity(), SerialInterface.SerialListener, Blueto
 
     override fun onMessageReceived(message: String) {
         addLog("BT RX: $message")
+        sendSerialCommand(message, source = "BT", notifyBluetoothOnError = true)
+    }
+
+    private fun sendSerialCommand(
+        command: String,
+        source: String,
+        notifyBluetoothOnError: Boolean = false
+    ): Boolean {
+        val serialCommand = command.trimEnd('\r', '\n')
+        if (serialCommand.isBlank()) {
+            addLog("$source message ignored, command is empty")
+            if (notifyBluetoothOnError) {
+                bluetoothServerManager.sendLine("ERR: empty command")
+            }
+            return false
+        }
 
         val manager = serialManager
         if (manager == null || !manager.isConnected) {
-            addLog("BT message ignored, serial is disconnected")
-            bluetoothServerManager.sendLine("ERR: serial disconnected")
-            return
+            addLog("$source message ignored, serial is disconnected")
+            if (notifyBluetoothOnError) {
+                bluetoothServerManager.sendLine("ERR: serial disconnected")
+            }
+            return false
         }
 
-        manager.send("$message\n")
-        addLog("BT→Serial: $message")
+        manager.send(serialCommand + SERIAL_COMMAND_TERMINATOR)
+        addLog("$source→Serial: $serialCommand")
+        return true
     }
 
     private fun forwardSerialDataToBluetooth(data: String) {
