@@ -4,6 +4,10 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
+val majorVer = 0
+val minorVer = 0
+val microVer = 2
+
 android {
     namespace = "com.example.gabot_client"
     compileSdk = 36
@@ -12,8 +16,12 @@ android {
         applicationId = "com.example.gabot_client"
         minSdk = 24
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = majorVer * 10000 + minorVer * 100 + microVer
+        versionName = "$majorVer.$minorVer.$microVer"
+
+        buildConfigField("int", "MAJOR_VER", "$majorVer")
+        buildConfigField("int", "MINOR_VER", "$minorVer")
+        buildConfigField("int", "MICRO_VER", "$microVer")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -36,6 +44,15 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
+    }
+
+    applicationVariants.all {
+        val variant = this
+        outputs.all {
+            val output = this as com.android.build.gradle.internal.api.BaseVariantOutputImpl
+            output.outputFileName = "GabotClient-$majorVer.$minorVer.$microVer-${variant.buildType.name}.apk"
+        }
     }
 }
 

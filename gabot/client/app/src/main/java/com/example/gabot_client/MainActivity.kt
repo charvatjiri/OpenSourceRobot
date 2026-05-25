@@ -1,47 +1,324 @@
 package com.example.gabot_client
 
+import android.Manifest
+import android.bluetooth.BluetoothAdapter
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import com.example.gabot_client.ui.theme.GabotClientTheme
 
-class MainActivity : ComponentActivity() {
+class MainActivity : ComponentActivity(), GabotBluetoothClient.Listener {
+
+    private lateinit var bluetoothClient: GabotBluetoothClient
+
+    private var devices by mutableStateOf<List<GabotBluetoothClient.DeviceInfo>>(emptyList())
+    private var selectedDevice by mutableStateOf<GabotBluetoothClient.DeviceInfo?>(null)
+    private var commandText by mutableStateOf("version")
+    private var connected by mutableStateOf(false)
+    private var statusText by mutableStateOf("Disconnected")
+    private val logMessages = mutableStateListOf<String>()
+
+    private val bluetoothPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            refreshDevices()
+        } else {
+            addLog("Bluetooth permission denied")
+        }
+    }
+
+    private val bluetoothEnableLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) {
+        if (bluetoothClient.isBluetoothEnabled()) {
+            refreshDevices()
+        } else {
+            addLog("Bluetooth enable request was declined")
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        bluetoothClient = GabotBluetoothClient(this)
+        bluetoothClient.listener = this
+
         enableEdgeToEdge()
         setContent {
             GabotClientTheme {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    Greeting(
-                        name = "Android",
+                    ClientScreen(
+                        devices = devices,
+                        selectedDevice = selectedDevice,
+                        connected = connected,
+                        statusText = statusText,
+                        commandText = commandText,
+                        logMessages = logMessages,
+                        onRefresh = ::refreshDevices,
+                        onSelectDevice = { selectedDevice = it },
+                        onConnect = ::connect,
+                        onDisconnect = ::disconnect,
+                        onCommandChange = { commandText = it },
+                        onSend = ::sendCommand,
+                        onClearLog = { logMessages.clear() },
                         modifier = Modifier.padding(innerPadding)
                     )
                 }
+            }
+        }
+
+        refreshDevices()
+    }
+
+    private fun refreshDevices() {
+        if (!bluetoothClient.isBluetoothSupported()) {
+            statusText = "Bluetooth unsupported"
+            addLog("Bluetooth is not supported on this device")
+            return
+        }
+
+        if (!hasBluetoothPermission()) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                bluetoothPermissionLauncher.launch(Manifest.permission.BLUETOOTH_CONNECT)
+            }
+            return
+        }
+
+        if (!bluetoothClient.isBluetoothEnabled()) {
+            statusText = "Bluetooth disabled"
+            bluetoothEnableLauncher.launch(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE))
+            return
+        }
+
+        devices = bluetoothClient.listBondedDevices()
+        selectedDevice = selectedDevice?.let { current ->
+            devices.firstOrNull { it.address == current.address }
+        } ?: devices.firstOrNull()
+        addLog("Found ${devices.size} paired Bluetooth device(s)")
+    }
+
+    private fun hasBluetoothPermission(): Boolean {
+        return Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
+            ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.BLUETOOTH_CONNECT
+            ) == PackageManager.PERMISSION_GRANTED
+    }
+
+    private fun connect() {
+        val device = selectedDevice
+        if (device == null) {
+            addLog("No paired Bluetooth device selected")
+            return
+        }
+
+        statusText = "Connecting to ${device.displayName}"
+        addLog("Connecting: ${device.displayName}")
+        bluetoothClient.connect(device.address)
+    }
+
+    private fun disconnect() {
+        bluetoothClient.disconnect()
+    }
+
+    private fun sendCommand() {
+        val command = commandText.trimEnd('\r', '\n')
+        if (bluetoothClient.sendLine(command)) {
+            addLog("TX: $command")
+        }
+    }
+
+    private fun addLog(message: String) {
+        runOnUiThread {
+            logMessages.add(message)
+        }
+    }
+
+    override fun onConnectionStateChanged(connected: Boolean) {
+        runOnUiThread {
+            this.connected = connected
+            statusText = if (connected) "Connected" else "Disconnected"
+            addLog(statusText)
+        }
+    }
+
+    override fun onLineReceived(line: String) {
+        addLog("RX: $line")
+    }
+
+    override fun onError(message: String) {
+        addLog("ERR: $message")
+    }
+
+    override fun onDestroy() {
+        bluetoothClient.destroy()
+        super.onDestroy()
+    }
+}
+
+@Composable
+private fun ClientScreen(
+    devices: List<GabotBluetoothClient.DeviceInfo>,
+    selectedDevice: GabotBluetoothClient.DeviceInfo?,
+    connected: Boolean,
+    statusText: String,
+    commandText: String,
+    logMessages: List<String>,
+    onRefresh: () -> Unit,
+    onSelectDevice: (GabotBluetoothClient.DeviceInfo) -> Unit,
+    onConnect: () -> Unit,
+    onDisconnect: () -> Unit,
+    onCommandChange: (String) -> Unit,
+    onSend: () -> Unit,
+    onClearLog: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(16.dp)
+            .verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Text("GabotClient", style = MaterialTheme.typography.headlineMedium)
+        Text("BT 4.2+ classic RFCOMM serial-command client", style = MaterialTheme.typography.bodyMedium)
+        Text("Status: $statusText", style = MaterialTheme.typography.titleMedium)
+
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = onRefresh, enabled = !connected) {
+                Text("Refresh paired devices")
+            }
+            if (connected) {
+                Button(onClick = onDisconnect) {
+                    Text("Disconnect")
+                }
+            } else {
+                Button(onClick = onConnect, enabled = selectedDevice != null) {
+                    Text("Connect")
+                }
+            }
+        }
+
+        Text("Paired devices", style = MaterialTheme.typography.titleMedium)
+        if (devices.isEmpty()) {
+            Text("No paired devices. Pair this phone with the GabotApp phone in Android Bluetooth settings first.")
+        } else {
+            devices.forEach { device ->
+                DeviceCard(
+                    device = device,
+                    selected = device.address == selectedDevice?.address,
+                    enabled = !connected,
+                    onClick = { onSelectDevice(device) }
+                )
+            }
+        }
+
+        OutlinedTextField(
+            value = commandText,
+            onValueChange = onCommandChange,
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text("Serial command") },
+            placeholder = { Text("version") },
+            singleLine = true,
+            enabled = connected
+        )
+        Button(
+            onClick = onSend,
+            enabled = connected && commandText.isNotBlank(),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Send command")
+        }
+
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Log", style = MaterialTheme.typography.titleMedium)
+            TextButton(onClick = onClearLog) {
+                Text("Clear")
+            }
+        }
+        LogView(logMessages)
+    }
+}
+
+@Composable
+private fun DeviceCard(
+    device: GabotBluetoothClient.DeviceInfo,
+    selected: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit
+) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(device.name, style = MaterialTheme.typography.titleSmall)
+                Text(device.address, style = MaterialTheme.typography.bodySmall)
+                if (selected) {
+                    Text("Selected", color = MaterialTheme.colorScheme.primary)
+                }
+            }
+            Button(onClick = onClick, enabled = enabled && !selected) {
+                Text(if (selected) "Selected" else "Select")
             }
         }
     }
 }
 
 @Composable
-fun Greeting(name: String, modifier: Modifier = Modifier) {
-    Text(
-        text = "Hello $name!",
-        modifier = modifier
-    )
-}
-
-@Preview(showBackground = true)
-@Composable
-fun GreetingPreview() {
-    GabotClientTheme {
-        Greeting("Android")
+private fun LogView(logMessages: List<String>) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp)
+        ) {
+            if (logMessages.isEmpty()) {
+                Text("No log messages")
+            } else {
+                logMessages.takeLast(80).forEach { line ->
+                    Text(
+                        text = line,
+                        style = MaterialTheme.typography.bodySmall,
+                        fontFamily = FontFamily.Monospace
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                }
+            }
+        }
     }
 }
