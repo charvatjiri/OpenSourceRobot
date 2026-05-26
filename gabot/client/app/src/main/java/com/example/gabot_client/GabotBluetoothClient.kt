@@ -29,7 +29,10 @@ class GabotBluetoothClient(context: Context) {
     }
 
     companion object {
-        private val SERVICE_UUID: UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
+        private val SERVICE_UUIDS: List<UUID> = listOf(
+            UUID.fromString("6F0F3F9A-89E1-4B2D-9D0E-EC7E98DB58B3"),
+            UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
+        )
     }
 
     private val appContext = context.applicationContext
@@ -57,10 +60,12 @@ class GabotBluetoothClient(context: Context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
             return true
         }
-        return ContextCompat.checkSelfPermission(
-            appContext,
-            Manifest.permission.BLUETOOTH_CONNECT
-        ) == PackageManager.PERMISSION_GRANTED
+        return listOf(
+            Manifest.permission.BLUETOOTH_CONNECT,
+            Manifest.permission.BLUETOOTH_SCAN
+        ).all { permission ->
+            ContextCompat.checkSelfPermission(appContext, permission) == PackageManager.PERMISSION_GRANTED
+        }
     }
 
     fun listBondedDevices(): List<DeviceInfo> {
@@ -104,8 +109,15 @@ class GabotBluetoothClient(context: Context) {
             try {
                 adapter.cancelDiscovery()
                 val device = adapter.getRemoteDevice(address)
-                val newSocket = device.createRfcommSocketToServiceRecord(SERVICE_UUID)
-                newSocket.connect()
+                val newSocket = SERVICE_UUIDS.firstNotNullOfOrNull { uuid ->
+                    runCatching {
+                        device.createRfcommSocketToServiceRecord(uuid).also { candidate ->
+                            candidate.connect()
+                        }
+                    }.onFailure {
+                        listener?.onError("Bluetooth connect attempt failed for $uuid: ${it.message}")
+                    }.getOrNull()
+                } ?: throw IOException("No supported RFCOMM service found on device")
                 socket = newSocket
                 listener?.onConnectionStateChanged(true)
                 startReadLoop(newSocket)

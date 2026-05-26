@@ -24,8 +24,8 @@ class BluetoothServerManager(context: Context) {
     }
 
     companion object {
-        const val SERVICE_NAME = "GabotApp"
-        val SERVICE_UUID: UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
+        const val SERVICE_NAME = "GabotAppServer"
+        val SERVICE_UUID: UUID = UUID.fromString("6F0F3F9A-89E1-4B2D-9D0E-EC7E98DB58B3")
     }
 
     private val appContext = context.applicationContext

@@ -50,12 +50,13 @@ class MainActivity : ComponentActivity(), GabotBluetoothClient.Listener {
     private val logMessages = mutableStateListOf<String>()
 
     private val bluetoothPermissionLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        if (granted) {
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { grants ->
+        if (hasBluetoothPermission()) {
             refreshDevices()
         } else {
-            addLog("Bluetooth permission denied")
+            val denied = grants.filterValues { !it }.keys.joinToString()
+            addLog("Bluetooth permission denied: $denied")
         }
     }
 
@@ -110,7 +111,7 @@ class MainActivity : ComponentActivity(), GabotBluetoothClient.Listener {
 
         if (!hasBluetoothPermission()) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                bluetoothPermissionLauncher.launch(Manifest.permission.BLUETOOTH_CONNECT)
+                bluetoothPermissionLauncher.launch(requiredBluetoothPermissions())
             }
             return
         }
@@ -129,11 +130,20 @@ class MainActivity : ComponentActivity(), GabotBluetoothClient.Listener {
     }
 
     private fun hasBluetoothPermission(): Boolean {
-        return Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
-            ContextCompat.checkSelfPermission(
-                this,
-                Manifest.permission.BLUETOOTH_CONNECT
-            ) == PackageManager.PERMISSION_GRANTED
+        return requiredBluetoothPermissions().all { permission ->
+            ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED
+        }
+    }
+
+    private fun requiredBluetoothPermissions(): Array<String> {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            arrayOf(
+                Manifest.permission.BLUETOOTH_CONNECT,
+                Manifest.permission.BLUETOOTH_SCAN
+            )
+        } else {
+            emptyArray()
+        }
     }
 
     private fun connect() {
