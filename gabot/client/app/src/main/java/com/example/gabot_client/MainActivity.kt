@@ -227,7 +227,17 @@ private fun ClientScreen(
             .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Text("GabotClient", style = MaterialTheme.typography.headlineMedium)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("GabotClient", style = MaterialTheme.typography.headlineMedium)
+            Text(
+                "v${BuildConfig.MAJOR_VER}.${BuildConfig.MINOR_VER}.${BuildConfig.MICRO_VER}",
+                style = MaterialTheme.typography.titleMedium
+            )
+        }
         Text("BT 4.2+ classic RFCOMM serial-command client", style = MaterialTheme.typography.bodyMedium)
         Text("Status: $statusText", style = MaterialTheme.typography.titleMedium)
 
