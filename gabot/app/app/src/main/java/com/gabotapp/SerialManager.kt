@@ -9,6 +9,7 @@ import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbDeviceConnection
 import android.hardware.usb.UsbManager
 import android.os.Build
+import android.util.Log
 import androidx.core.content.IntentCompat
 import com.hoho.android.usbserial.driver.UsbSerialDriver
 import com.hoho.android.usbserial.driver.UsbSerialPort
@@ -21,6 +22,7 @@ import java.util.concurrent.Executors
 class SerialManager(private val context: Context) : SerialInterface, SerialInputOutputManager.Listener {
 
     companion object {
+        private const val TAG = "GabotApp-Serial"
         private const val ACTION_USB_PERMISSION = "com.gabotapp.USB_PERMISSION"
         const val BAUD_RATE = 115200
     }
@@ -64,6 +66,7 @@ class SerialManager(private val context: Context) : SerialInterface, SerialInput
 
     override fun findDevices(): List<SerialInterface.DeviceInfo> {
         availableDrivers = UsbSerialProber.getDefaultProber().findAllDrivers(usbManager)
+        Log.d(TAG, "Found ${availableDrivers.size} USB serial driver(s)")
         return availableDrivers.mapIndexed { index, driver ->
             val device = driver.device
             SerialInterface.DeviceInfo(
@@ -142,6 +145,7 @@ class SerialManager(private val context: Context) : SerialInterface, SerialInput
             ioExecutor.submit(newIoManager)
 
             isConnected = true
+            Log.d(TAG, "Serial connected: ${device.deviceName}")
             listener?.onConnectionStateChanged(true)
 
         } catch (e: Exception) {
@@ -158,6 +162,7 @@ class SerialManager(private val context: Context) : SerialInterface, SerialInput
             return
         }
         try {
+            Log.d(TAG, "Serial TX: $data")
             serialPort?.write(data.toByteArray(), 1000)
         } catch (e: Exception) {
             listener?.onError("Send failed: ${e.message ?: e.javaClass.simpleName}")
@@ -170,6 +175,7 @@ class SerialManager(private val context: Context) : SerialInterface, SerialInput
             return
         }
         try {
+            Log.d(TAG, "Serial TX bytes: ${data.size}")
             serialPort?.write(data, 1000)
         } catch (e: Exception) {
             listener?.onError("Send failed: ${e.message ?: e.javaClass.simpleName}")
@@ -210,6 +216,7 @@ class SerialManager(private val context: Context) : SerialInterface, SerialInput
 
     override fun onNewData(data: ByteArray) {
         val received = String(data)
+        Log.d(TAG, "Serial RX chunk: $received")
         listener?.onDataReceived(received)
     }
 

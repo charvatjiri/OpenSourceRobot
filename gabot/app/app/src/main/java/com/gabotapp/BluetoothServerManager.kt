@@ -8,6 +8,7 @@ import android.bluetooth.BluetoothSocket
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
+import android.util.Log
 import androidx.core.content.ContextCompat
 import java.io.IOException
 import java.util.UUID
@@ -24,6 +25,7 @@ class BluetoothServerManager(context: Context) {
     }
 
     companion object {
+        private const val TAG = "GabotApp-BT"
         const val SERVICE_NAME = "GabotAppServer"
         val SERVICE_UUID: UUID = UUID.fromString("6F0F3F9A-89E1-4B2D-9D0E-EC7E98DB58B3")
     }
@@ -84,6 +86,7 @@ class BluetoothServerManager(context: Context) {
         try {
             serverSocket = adapter.listenUsingRfcommWithServiceRecord(SERVICE_NAME, SERVICE_UUID)
             serverRunning = true
+            Log.d(TAG, "Bluetooth server started: $SERVICE_NAME")
             acceptThread = thread(name = "bt-server-accept", start = true) {
                 acceptLoop()
             }
@@ -99,6 +102,7 @@ class BluetoothServerManager(context: Context) {
 
     fun stop() {
         serverRunning = false
+        Log.d(TAG, "Bluetooth server stopping")
         closeClient(notify = false)
 
         try {
@@ -117,6 +121,7 @@ class BluetoothServerManager(context: Context) {
     fun hasClientConnection(): Boolean = clientSocket?.isConnected == true
 
     fun sendLine(message: String): Boolean {
+        Log.d(TAG, "BT TX: $message")
         return sendRaw("$message\n")
     }
 
@@ -127,6 +132,7 @@ class BluetoothServerManager(context: Context) {
                 socket.outputStream.write(message.toByteArray(Charsets.UTF_8))
                 socket.outputStream.flush()
             }
+            Log.d(TAG, "BT TX raw: ${message.replace("\n", "\\n")}")
             true
         } catch (e: IOException) {
             closeClient(notify = true)
@@ -156,6 +162,7 @@ class BluetoothServerManager(context: Context) {
                         ?: acceptedSocket.remoteDevice?.address
                         ?: "unknown device"
                 }.getOrElse { "unknown device" }
+                Log.d(TAG, "Bluetooth client connected: $clientName")
                 listener?.onClientConnected(clientName)
 
                 readThread = thread(name = "bt-server-read", start = true) {
@@ -180,6 +187,7 @@ class BluetoothServerManager(context: Context) {
             socket.inputStream.bufferedReader(Charsets.UTF_8).use { reader ->
                 while (serverRunning && socket == clientSocket) {
                     val line = reader.readLine() ?: break
+                    Log.d(TAG, "BT RX: $line")
                     listener?.onMessageReceived(line)
                 }
             }

@@ -6,6 +6,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -43,6 +44,10 @@ import androidx.core.content.ContextCompat
 import com.example.gabot_client.ui.theme.GabotClientTheme
 
 class MainActivity : ComponentActivity(), GabotBluetoothClient.Listener {
+
+    companion object {
+        private const val TAG = "GabotClient"
+    }
 
     private lateinit var bluetoothClient: GabotBluetoothClient
 
@@ -169,11 +174,13 @@ class MainActivity : ComponentActivity(), GabotBluetoothClient.Listener {
     private fun sendCommand() {
         val command = commandText.trimEnd('\r', '\n')
         if (bluetoothClient.sendLine(command)) {
+            Log.d(TAG, "BT TX command='$command'")
             addLog("TX: $command")
         }
     }
 
     private fun addLog(message: String) {
+        Log.d(TAG, "UI LOG: $message")
         runOnUiThread {
             logMessages.add(message)
         }
@@ -188,7 +195,11 @@ class MainActivity : ComponentActivity(), GabotBluetoothClient.Listener {
     }
 
     override fun onLineReceived(line: String) {
-        addLog("RX: $line")
+        val normalizedLine = line.trim()
+        Log.d(TAG, "BT RX raw='$line', normalized='$normalizedLine'")
+        if (normalizedLine.isNotBlank()) {
+            addLog("RX: $normalizedLine")
+        }
     }
 
     override fun onError(message: String) {
@@ -199,6 +210,7 @@ class MainActivity : ComponentActivity(), GabotBluetoothClient.Listener {
         bluetoothClient.destroy()
         super.onDestroy()
     }
+
 }
 
 @Composable

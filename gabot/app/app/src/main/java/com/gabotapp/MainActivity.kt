@@ -7,6 +7,7 @@ import android.content.pm.PackageManager
 import android.hardware.usb.UsbManager
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -52,6 +53,7 @@ import androidx.core.content.ContextCompat
 class MainActivity : ComponentActivity(), SerialInterface.SerialListener, BluetoothServerManager.Listener {
 
     companion object {
+        private const val TAG = "GabotApp"
         val MAJOR_VER = BuildConfig.MAJOR_VER
         val MINOR_VER = BuildConfig.MINOR_VER
         val MICRO_VER = BuildConfig.MICRO_VER
@@ -70,6 +72,7 @@ class MainActivity : ComponentActivity(), SerialInterface.SerialListener, Blueto
     private var statusText by mutableStateOf("Disconnected")
     private val logMessages = mutableStateListOf<String>()
     private val serialReceiveBuffer = StringBuilder()
+    private var pendingBluetoothResponse: ExpectedBluetoothResponse? = null
 
     private val bluetoothPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -207,6 +210,7 @@ class MainActivity : ComponentActivity(), SerialInterface.SerialListener, Blueto
     }
 
     private fun addLog(message: String) {
+        Log.d(TAG, message)
         runOnUiThread {
             logMessages.add(message)
         }
@@ -225,6 +229,7 @@ class MainActivity : ComponentActivity(), SerialInterface.SerialListener, Blueto
     }
 
     override fun onDataReceived(data: String) {
+        Log.d(TAG, "Serial RX chunk: $data")
         addLog("RX: $data")
         forwardSerialDataToBluetooth(data)
     }
@@ -235,6 +240,7 @@ class MainActivity : ComponentActivity(), SerialInterface.SerialListener, Blueto
         statusText = if (connected) "Connected" else "Disconnected"
         if (!connected) {
             serialReceiveBuffer.setLength(0)
+            pendingBluetoothResponse = null
         }
         sendBluetoothInfo(if (connected) "serial connected" else "serial disconnected")
         addLog(if (connected) "Connected successfully" else "Connection closed")
@@ -271,10 +277,13 @@ class MainActivity : ComponentActivity(), SerialInterface.SerialListener, Blueto
     }
 
     override fun onClientDisconnected() {
+        pendingBluetoothResponse = null
+        Log.d(TAG, "Bluetooth client disconnected")
         addLog("Bluetooth client disconnected")
     }
 
     override fun onMessageReceived(message: String) {
+        Log.d(TAG, "BT RX: $message")
         addLog("BT RX: $message")
         handleBluetoothMessage(message)
     }
@@ -284,7 +293,11 @@ class MainActivity : ComponentActivity(), SerialInterface.SerialListener, Blueto
         if (normalizedMessage.startsWith(HIGH_LEVEL_COMMAND_PREFIX)) {
             handleHighLevelCommand(normalizedMessage)
         } else {
-            sendSerialCommand(normalizedMessage, source = "BT", notifyBluetoothOnError = true)
+            pendingBluetoothResponse = ExpectedBluetoothResponse.forCommand(normalizedMessage)
+            Log.d(TAG, "BT->Serial: $normalizedMessage")
+            if (!sendSerialCommand(normalizedMessage, source = "BT", notifyBluetoothOnError = true)) {
+                pendingBluetoothResponse = null
+            }
         }
     }
 
@@ -300,6 +313,7 @@ class MainActivity : ComponentActivity(), SerialInterface.SerialListener, Blueto
     ): Boolean {
         val serialCommand = command.trimEnd('\r', '\n')
         if (serialCommand.isBlank()) {
+            Log.d(TAG, "$source command ignored: empty")
             addLog("$source message ignored, command is empty")
             if (notifyBluetoothOnError) {
                 bluetoothServerManager.sendLine("ERR: empty command")
@@ -309,6 +323,7 @@ class MainActivity : ComponentActivity(), SerialInterface.SerialListener, Blueto
 
         val manager = serialManager
         if (manager == null || !manager.isConnected) {
+            Log.d(TAG, "$source command ignored: serial disconnected")
             addLog("$source message ignored, serial is disconnected")
             if (notifyBluetoothOnError) {
                 bluetoothServerManager.sendLine("ERR: serial disconnected")
@@ -316,6 +331,7 @@ class MainActivity : ComponentActivity(), SerialInterface.SerialListener, Blueto
             return false
         }
 
+        Log.d(TAG, "$source->Serial: $serialCommand")
         manager.send(serialCommand + SERIAL_COMMAND_TERMINATOR)
         addLog("$source->Serial: $serialCommand")
         return true
@@ -323,6 +339,7 @@ class MainActivity : ComponentActivity(), SerialInterface.SerialListener, Blueto
 
     private fun forwardSerialDataToBluetooth(data: String) {
         if (!bluetoothServerManager.hasClientConnection()) {
+            Log.d(TAG, "Serial RX dropped: no BT client")
             return
         }
 
@@ -331,14 +348,84 @@ class MainActivity : ComponentActivity(), SerialInterface.SerialListener, Blueto
         while (newlineIndex >= 0) {
             val line = serialReceiveBuffer.substring(0, newlineIndex).trimEnd('\r')
             serialReceiveBuffer.delete(0, newlineIndex + 1)
-            bluetoothServerManager.sendLine(line)
-            addLog("Serial->BT: $line")
+            forwardSerialLineToBluetoothIfExpected(line)
             newlineIndex = serialReceiveBuffer.indexOf("\n")
         }
     }
 
+    private fun forwardSerialLineToBluetoothIfExpected(line: String) {
+        val pendingResponse = pendingBluetoothResponse
+        if (pendingResponse == null) {
+            Log.d(TAG, "Serial->BT filtered: $line")
+            addLog("Serial->BT filtered: $line")
+            return
+        }
+
+        val result = pendingResponse.accept(line)
+        if (result.log) {
+            Log.d(TAG, "Serial->BT: $line")
+            bluetoothServerManager.sendLine(line)
+            addLog("Serial->BT: $line")
+        } else {
+            Log.d(TAG, "Serial->BT filtered: $line")
+            addLog("Serial->BT filtered: $line")
+        }
+        if (result.complete) {
+            pendingBluetoothResponse = null
+        }
+    }
+
     private fun sendBluetoothInfo(message: String) {
+        Log.d(TAG, "BT TX: INFO: $message")
         bluetoothServerManager.sendLine("INFO: $message")
+    }
+
+    private class ExpectedBluetoothResponse(
+        private val expectedPayloadLinesAfterOk: Int = 0
+    ) {
+        private var okReceived = false
+        private var acceptedPayloadLines = 0
+
+        fun accept(line: String): MatchResult {
+            if (isStatusLine(line)) {
+                okReceived = line.startsWith("OK", ignoreCase = true)
+                return MatchResult(
+                    log = true,
+                    complete = !okReceived || expectedPayloadLinesAfterOk == 0
+                )
+            }
+
+            if (!okReceived || expectedPayloadLinesAfterOk == 0) {
+                return MatchResult(log = false, complete = false)
+            }
+
+            acceptedPayloadLines += 1
+            return MatchResult(
+                log = true,
+                complete = acceptedPayloadLines >= expectedPayloadLinesAfterOk
+            )
+        }
+
+        private fun isStatusLine(line: String): Boolean {
+            return line.startsWith("OK", ignoreCase = true) ||
+                line.startsWith("ERR", ignoreCase = true)
+        }
+
+        data class MatchResult(
+            val log: Boolean,
+            val complete: Boolean
+        )
+
+        companion object {
+            fun forCommand(command: String): ExpectedBluetoothResponse {
+                val normalizedCommand = command.trim().lowercase()
+                return if (normalizedCommand == "get version" || normalizedCommand == "version") {
+                    ExpectedBluetoothResponse(expectedPayloadLinesAfterOk = 1)
+                } else {
+                    ExpectedBluetoothResponse()
+                }
+            }
+        }
     }
 }
 
