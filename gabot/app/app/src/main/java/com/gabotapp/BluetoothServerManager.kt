@@ -129,12 +129,12 @@ class BluetoothServerManager(context: Context) {
             }
             true
         } catch (e: IOException) {
-            listener?.onError("Bluetooth write failed: ${e.message}")
             closeClient(notify = true)
+            listener?.onError("Bluetooth write failed: ${e.message}")
             false
         } catch (e: SecurityException) {
-            listener?.onError("Bluetooth write denied: ${e.message}")
             closeClient(notify = true)
+            listener?.onError("Bluetooth write denied: ${e.message}")
             false
         }
     }
@@ -152,10 +152,10 @@ class BluetoothServerManager(context: Context) {
                 clientSocket = acceptedSocket
 
                 val clientName = runCatching {
-                    acceptedSocket.remoteDevice?.name
-                }.getOrNull().orEmpty().ifBlank {
-                    acceptedSocket.remoteDevice?.address ?: "unknown device"
-                }
+                    acceptedSocket.remoteDevice?.name?.ifBlank { null }
+                        ?: acceptedSocket.remoteDevice?.address
+                        ?: "unknown device"
+                }.getOrElse { "unknown device" }
                 listener?.onClientConnected(clientName)
 
                 readThread = thread(name = "bt-server-read", start = true) {
@@ -212,7 +212,10 @@ class BluetoothServerManager(context: Context) {
         } catch (_: IOException) {
         }
 
-        readThread?.interrupt()
+        val activeReadThread = readThread
+        if (activeReadThread != Thread.currentThread()) {
+            activeReadThread?.interrupt()
+        }
         readThread = null
 
         if (notify && activeSocket != null) {
