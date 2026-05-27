@@ -369,7 +369,17 @@ private fun ServerScreen(
             .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Text("GabotApp", style = MaterialTheme.typography.headlineMedium)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("GabotApp", style = MaterialTheme.typography.headlineMedium)
+            Text(
+                "v${MainActivity.MAJOR_VER}.${MainActivity.MINOR_VER}.${MainActivity.MICRO_VER}",
+                style = MaterialTheme.typography.titleMedium
+            )
+        }
         Text("BT 4.2+ classic RFCOMM serial-command server", style = MaterialTheme.typography.bodyMedium)
         Text("Status: $statusText", style = MaterialTheme.typography.titleMedium)
 
