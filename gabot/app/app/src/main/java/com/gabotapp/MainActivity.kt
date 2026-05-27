@@ -56,6 +56,7 @@ class MainActivity : ComponentActivity(), SerialInterface.SerialListener, Blueto
         val MINOR_VER = BuildConfig.MINOR_VER
         val MICRO_VER = BuildConfig.MICRO_VER
         private const val SERIAL_COMMAND_TERMINATOR = "\n"
+        private const val HIGH_LEVEL_COMMAND_PREFIX = "hl:"
     }
 
     private var serialManager: SerialInterface? = null
@@ -275,7 +276,21 @@ class MainActivity : ComponentActivity(), SerialInterface.SerialListener, Blueto
 
     override fun onMessageReceived(message: String) {
         addLog("BT RX: $message")
-        sendSerialCommand(message, source = "BT", notifyBluetoothOnError = true)
+        handleBluetoothMessage(message)
+    }
+
+    private fun handleBluetoothMessage(message: String) {
+        val normalizedMessage = message.trimEnd('\r', '\n')
+        if (normalizedMessage.startsWith(HIGH_LEVEL_COMMAND_PREFIX)) {
+            handleHighLevelCommand(normalizedMessage)
+        } else {
+            sendSerialCommand(normalizedMessage, source = "BT", notifyBluetoothOnError = true)
+        }
+    }
+
+    private fun handleHighLevelCommand(command: String) {
+        addLog("BT high-level command: $command")
+        bluetoothServerManager.sendLine("ERR: high-level commands are not implemented yet")
     }
 
     private fun sendSerialCommand(
