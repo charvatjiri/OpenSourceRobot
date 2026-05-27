@@ -35,7 +35,7 @@ void wdt_init(void)
 
 #define VER_MAJOR 3
 #define VER_MINOR 1
-#define VER_MICRO 3
+#define VER_MICRO 4
 
 //#define CE 9  //UNO
 #define CE 49  //mega

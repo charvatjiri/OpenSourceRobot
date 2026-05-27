@@ -116,6 +116,7 @@ int SerialCommand::processCommand(String cmd)
 
 int SerialCommand::cmdGetVersion()
 {
+    Serial.println("OK get version");
     Serial.print(m_verMajor);
     Serial.print(".");
     Serial.print(m_verMinor);
