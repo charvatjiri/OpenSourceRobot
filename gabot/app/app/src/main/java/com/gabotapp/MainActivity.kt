@@ -75,6 +75,7 @@ class MainActivity : ComponentActivity(), SerialInterface.SerialListener, Blueto
     private val serialReceiveBuffer = StringBuilder()
     private var pendingBluetoothResponse: ExpectedBluetoothResponse? = null
     private val highLevelCommandParser = HighLevelCommandParser()
+    private lateinit var serialCommandExecutor: SerialCommandExecutor
 
     private val bluetoothPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -98,6 +99,7 @@ class MainActivity : ComponentActivity(), SerialInterface.SerialListener, Blueto
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        initSerialCommandExecutor()
         initSerialManager()
         initBluetoothServer()
 
@@ -140,6 +142,15 @@ class MainActivity : ComponentActivity(), SerialInterface.SerialListener, Blueto
         bluetoothServerManager = BluetoothServerManager(this)
         bluetoothServerManager.listener = this
         ensureBluetoothServerRunning()
+    }
+
+    private fun initSerialCommandExecutor() {
+        serialCommandExecutor = SerialCommandExecutor(
+            sendCommand = { command -> sendSerialCommand(command, source = "HL") },
+            sendFailStopCommand = { command -> sendSerialCommand(command, source = "HL fail-stop") },
+            onLog = ::addLog,
+            onComplete = ::handleSerialExecutionResult
+        )
     }
 
     private fun ensureBluetoothServerRunning() {
@@ -243,6 +254,7 @@ class MainActivity : ComponentActivity(), SerialInterface.SerialListener, Blueto
         if (!connected) {
             serialReceiveBuffer.setLength(0)
             pendingBluetoothResponse = null
+            serialCommandExecutor.cancel("serial disconnected")
         }
         sendBluetoothInfo(if (connected) "serial connected" else "serial disconnected")
         addLog(if (connected) "Connected successfully" else "Connection closed")
@@ -262,6 +274,7 @@ class MainActivity : ComponentActivity(), SerialInterface.SerialListener, Blueto
     }
 
     override fun onDestroy() {
+        serialCommandExecutor.destroy()
         bluetoothServerManager.stop()
         serialManager?.destroy()
         super.onDestroy()
@@ -280,6 +293,7 @@ class MainActivity : ComponentActivity(), SerialInterface.SerialListener, Blueto
 
     override fun onClientDisconnected() {
         pendingBluetoothResponse = null
+        serialCommandExecutor.cancelAndFailStop("bluetooth client disconnected")
         Log.d(TAG, "Bluetooth client disconnected")
         addLog("Bluetooth client disconnected")
     }
@@ -332,18 +346,26 @@ class MainActivity : ComponentActivity(), SerialInterface.SerialListener, Blueto
             return
         }
 
-        val stopCommands = listOf(
-            "shoulder horizontal 0",
-            "shoulder vertical 0",
-            "wheels fb 0",
-            "wheels rl 0",
-            "grab 0",
-            "release 0"
-        )
-        stopCommands.forEach { command ->
-            sendSerialCommand(command, source = "HL")
+        if (!serialCommandExecutor.execute("hl stop", SerialCommandExecutor.STOP_COMMANDS)) {
+            bluetoothServerManager.sendLine("ERR: serial executor busy")
         }
-        bluetoothServerManager.sendLine("OK hl stop")
+    }
+
+    private fun handleSerialExecutionResult(result: SerialCommandExecutor.ExecutionResult) {
+        when (result) {
+            SerialCommandExecutor.ExecutionResult.Success -> {
+                bluetoothServerManager.sendLine("OK hl stop")
+            }
+            is SerialCommandExecutor.ExecutionResult.Error -> {
+                bluetoothServerManager.sendLine("ERR: ${result.response}")
+            }
+            is SerialCommandExecutor.ExecutionResult.Timeout -> {
+                bluetoothServerManager.sendLine("ERR: timeout waiting for ${result.command}")
+            }
+            is SerialCommandExecutor.ExecutionResult.SendFailed -> {
+                bluetoothServerManager.sendLine("ERR: failed to send ${result.command}")
+            }
+        }
     }
 
     private fun sendSerialCommand(
@@ -378,19 +400,28 @@ class MainActivity : ComponentActivity(), SerialInterface.SerialListener, Blueto
     }
 
     private fun forwardSerialDataToBluetooth(data: String) {
-        if (!bluetoothServerManager.hasClientConnection()) {
-            Log.d(TAG, "Serial RX dropped: no BT client")
-            return
-        }
-
         serialReceiveBuffer.append(data)
         var newlineIndex = serialReceiveBuffer.indexOf("\n")
         while (newlineIndex >= 0) {
             val line = serialReceiveBuffer.substring(0, newlineIndex).trimEnd('\r')
             serialReceiveBuffer.delete(0, newlineIndex + 1)
-            forwardSerialLineToBluetoothIfExpected(line)
+            handleSerialLine(line)
             newlineIndex = serialReceiveBuffer.indexOf("\n")
         }
+    }
+
+    private fun handleSerialLine(line: String) {
+        if (serialCommandExecutor.onSerialLine(line)) {
+            addLog("Serial executor consumed: $line")
+            return
+        }
+
+        if (!bluetoothServerManager.hasClientConnection()) {
+            Log.d(TAG, "Serial RX dropped: no BT client")
+            return
+        }
+
+        forwardSerialLineToBluetoothIfExpected(line)
     }
 
     private fun forwardSerialLineToBluetoothIfExpected(line: String) {
