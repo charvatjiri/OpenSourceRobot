@@ -9,8 +9,8 @@ VERSION_RE = re.compile(r"^\d+\.\d+\.\d+$")
 @pytest.mark.parametrize(
     ("command", "expected"),
     [
-        ("get version", "3.1.3"),
-        ("GET VERSION", "3.1.3"),
+        ("get version", "3.1.4"),
+        ("GET VERSION", "3.1.4"),
     ],
     ids=[
         "version-lowercase",
