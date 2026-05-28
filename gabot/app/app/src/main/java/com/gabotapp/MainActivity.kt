@@ -13,6 +13,10 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.camera.core.CameraSelector
+import androidx.camera.core.Preview
+import androidx.camera.lifecycle.ProcessCameraProvider
+import androidx.camera.view.PreviewView
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -31,6 +35,8 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.darkColorScheme
@@ -42,6 +48,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -49,7 +56,9 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.LifecycleOwner
 
 class MainActivity : ComponentActivity(), SerialInterface.SerialListener, BluetoothServerManager.Listener {
 
@@ -71,6 +80,7 @@ class MainActivity : ComponentActivity(), SerialInterface.SerialListener, Blueto
     private var serialConnected by mutableStateOf(false)
     private var isConnecting by mutableStateOf(false)
     private var statusText by mutableStateOf("Disconnected")
+    private var cameraPermissionGranted by mutableStateOf(false)
     private val logMessages = mutableStateListOf<String>()
     private val serialReceiveBuffer = StringBuilder()
     private var pendingBluetoothResponse: ExpectedBluetoothResponse? = null
@@ -97,11 +107,19 @@ class MainActivity : ComponentActivity(), SerialInterface.SerialListener, Blueto
         }
     }
 
+    private val cameraPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        cameraPermissionGranted = granted
+        addLog(if (granted) "Camera permission granted" else "Camera permission denied")
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         initSerialCommandExecutor()
         initSerialManager()
         initBluetoothServer()
+        cameraPermissionGranted = hasCameraPermission()
 
         enableEdgeToEdge()
         setContent {
@@ -115,6 +133,8 @@ class MainActivity : ComponentActivity(), SerialInterface.SerialListener, Blueto
                         statusText = statusText,
                         commandText = commandText,
                         logMessages = logMessages,
+                        cameraPermissionGranted = cameraPermissionGranted,
+                        onRequestCameraPermission = ::requestCameraPermission,
                         onRefresh = ::refreshDevices,
                         onSelectDevice = { selectedDeviceIndex = it },
                         onConnect = ::connect,
@@ -179,6 +199,17 @@ class MainActivity : ComponentActivity(), SerialInterface.SerialListener, Blueto
                 this,
                 Manifest.permission.BLUETOOTH_CONNECT
             ) == PackageManager.PERMISSION_GRANTED
+    }
+
+    private fun hasCameraPermission(): Boolean {
+        return ContextCompat.checkSelfPermission(
+            this,
+            Manifest.permission.CAMERA
+        ) == PackageManager.PERMISSION_GRANTED
+    }
+
+    private fun requestCameraPermission() {
+        cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
     }
 
     private fun refreshDevices() {
@@ -509,6 +540,86 @@ private fun ServerScreen(
     statusText: String,
     commandText: String,
     logMessages: List<String>,
+    cameraPermissionGranted: Boolean,
+    onRequestCameraPermission: () -> Unit,
+    onRefresh: () -> Unit,
+    onSelectDevice: (Int) -> Unit,
+    onConnect: () -> Unit,
+    onDisconnect: () -> Unit,
+    onCommandChange: (String) -> Unit,
+    onSend: () -> Unit,
+    onClearLog: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val tabs = listOf("Control", "Camera")
+    var selectedTab by rememberSaveable { mutableStateOf(0) }
+
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("GabotApp", style = MaterialTheme.typography.headlineMedium)
+            Text(
+                "v${MainActivity.MAJOR_VER}.${MainActivity.MINOR_VER}.${MainActivity.MICRO_VER}",
+                style = MaterialTheme.typography.titleMedium
+            )
+        }
+
+        TabRow(selectedTabIndex = selectedTab) {
+            tabs.forEachIndexed { index, title ->
+                Tab(
+                    selected = selectedTab == index,
+                    onClick = { selectedTab = index },
+                    text = { Text(title) }
+                )
+            }
+        }
+
+        when (selectedTab) {
+            0 -> ControlTab(
+                devices = devices,
+                selectedDeviceIndex = selectedDeviceIndex,
+                serialConnected = serialConnected,
+                isConnecting = isConnecting,
+                statusText = statusText,
+                commandText = commandText,
+                logMessages = logMessages,
+                onRefresh = onRefresh,
+                onSelectDevice = onSelectDevice,
+                onConnect = onConnect,
+                onDisconnect = onDisconnect,
+                onCommandChange = onCommandChange,
+                onSend = onSend,
+                onClearLog = onClearLog,
+                modifier = Modifier.weight(1f)
+            )
+            1 -> CameraTab(
+                logMessages = logMessages,
+                cameraPermissionGranted = cameraPermissionGranted,
+                onRequestCameraPermission = onRequestCameraPermission,
+                onClearLog = onClearLog,
+                modifier = Modifier.weight(1f)
+            )
+        }
+    }
+}
+
+@Composable
+private fun ControlTab(
+    devices: List<SerialInterface.DeviceInfo>,
+    selectedDeviceIndex: Int,
+    serialConnected: Boolean,
+    isConnecting: Boolean,
+    statusText: String,
+    commandText: String,
+    logMessages: List<String>,
     onRefresh: () -> Unit,
     onSelectDevice: (Int) -> Unit,
     onConnect: () -> Unit,
@@ -520,16 +631,9 @@ private fun ServerScreen(
 ) {
     val maxLogHeight = LocalConfiguration.current.screenHeightDp.dp / 2
     val contentScrollState = rememberScrollState()
-    val logScrollState = rememberScrollState()
-
-    LaunchedEffect(logMessages.size, logScrollState.maxValue) {
-        logScrollState.animateScrollTo(logScrollState.maxValue)
-    }
 
     Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(16.dp),
+        modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Column(
@@ -539,17 +643,6 @@ private fun ServerScreen(
                 .verticalScroll(contentScrollState),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text("GabotApp", style = MaterialTheme.typography.headlineMedium)
-                Text(
-                    "v${MainActivity.MAJOR_VER}.${MainActivity.MINOR_VER}.${MainActivity.MICRO_VER}",
-                    style = MaterialTheme.typography.titleMedium
-                )
-            }
             Text("BT 4.2+ classic RFCOMM serial-command server", style = MaterialTheme.typography.bodyMedium)
             Text("Status: $statusText", style = MaterialTheme.typography.titleMedium)
 
@@ -603,43 +696,155 @@ private fun ServerScreen(
             }
         }
 
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+        LogPanel(
+            logMessages = logMessages,
+            onClearLog = onClearLog,
+            modifier = Modifier.heightIn(max = maxLogHeight)
+        )
+    }
+}
+
+@Composable
+private fun CameraTab(
+    logMessages: List<String>,
+    cameraPermissionGranted: Boolean,
+    onRequestCameraPermission: () -> Unit,
+    onClearLog: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val halfScreenHeight = LocalConfiguration.current.screenHeightDp.dp / 2
+
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        CameraPreviewCard(
+            cameraPermissionGranted = cameraPermissionGranted,
+            onRequestCameraPermission = onRequestCameraPermission,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(halfScreenHeight)
+        )
+        LogPanel(
+            logMessages = logMessages,
+            onClearLog = onClearLog,
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+        )
+    }
+}
+
+@Composable
+private fun CameraPreviewCard(
+    cameraPermissionGranted: Boolean,
+    onRequestCameraPermission: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(modifier = modifier) {
+        if (cameraPermissionGranted) {
+            CameraPreview(modifier = Modifier.fillMaxSize())
+        } else {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Text("Log", style = MaterialTheme.typography.titleMedium)
-                TextButton(
-                    onClick = onClearLog,
-                    modifier = Modifier.height(32.dp),
-                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
-                ) {
-                    Text("Clear")
+                Text("Camera permission is required", style = MaterialTheme.typography.bodyMedium)
+                Button(onClick = onRequestCameraPermission) {
+                    Text("Allow camera")
                 }
             }
-            Card(
+        }
+    }
+}
+
+@Composable
+private fun CameraPreview(modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    val lifecycleOwner = context as LifecycleOwner
+
+    AndroidView(
+        modifier = modifier,
+        factory = { viewContext ->
+            PreviewView(viewContext).apply {
+                scaleType = PreviewView.ScaleType.FILL_CENTER
+            }
+        },
+        update = { previewView ->
+            val cameraProviderFuture = ProcessCameraProvider.getInstance(context)
+            cameraProviderFuture.addListener(
+                {
+                    val cameraProvider = cameraProviderFuture.get()
+                    val preview = Preview.Builder().build().also { preview ->
+                        preview.setSurfaceProvider(previewView.surfaceProvider)
+                    }
+                    cameraProvider.unbindAll()
+                    cameraProvider.bindToLifecycle(
+                        lifecycleOwner,
+                        CameraSelector.DEFAULT_BACK_CAMERA,
+                        preview
+                    )
+                },
+                ContextCompat.getMainExecutor(context)
+            )
+        }
+    )
+}
+
+@Composable
+private fun LogPanel(
+    logMessages: List<String>,
+    onClearLog: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val logScrollState = rememberScrollState()
+
+    LaunchedEffect(logMessages.size, logScrollState.maxValue) {
+        logScrollState.animateScrollTo(logScrollState.maxValue)
+    }
+
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("Log", style = MaterialTheme.typography.titleMedium)
+            TextButton(
+                onClick = onClearLog,
+                modifier = Modifier.height(32.dp),
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+            ) {
+                Text("Clear")
+            }
+        }
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+        ) {
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(max = maxLogHeight)
+                    .verticalScroll(logScrollState)
+                    .padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .verticalScroll(logScrollState)
-                        .padding(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    if (logMessages.isEmpty()) {
-                        Text("No log entries", style = MaterialTheme.typography.bodyMedium)
-                    } else {
-                        logMessages.takeLast(80).forEach { message ->
-                            Text(
-                                text = message,
-                                style = MaterialTheme.typography.bodySmall,
-                                fontFamily = FontFamily.Monospace
-                            )
-                        }
+                if (logMessages.isEmpty()) {
+                    Text("No log entries", style = MaterialTheme.typography.bodyMedium)
+                } else {
+                    logMessages.takeLast(80).forEach { message ->
+                        Text(
+                            text = message,
+                            style = MaterialTheme.typography.bodySmall,
+                            fontFamily = FontFamily.Monospace
+                        )
                     }
                 }
             }
