@@ -38,6 +38,7 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -58,7 +59,7 @@ class MainActivity : ComponentActivity(), SerialInterface.SerialListener, Blueto
         val MINOR_VER = BuildConfig.MINOR_VER
         val MICRO_VER = BuildConfig.MICRO_VER
         private const val SERIAL_COMMAND_TERMINATOR = "\n"
-        private const val HIGH_LEVEL_COMMAND_PREFIX = "hl:"
+        private const val HIGH_LEVEL_COMMAND_PREFIX = HighLevelCommandParser.HIGH_LEVEL_PREFIX
     }
 
     private var serialManager: SerialInterface? = null
@@ -73,6 +74,7 @@ class MainActivity : ComponentActivity(), SerialInterface.SerialListener, Blueto
     private val logMessages = mutableStateListOf<String>()
     private val serialReceiveBuffer = StringBuilder()
     private var pendingBluetoothResponse: ExpectedBluetoothResponse? = null
+    private val highLevelCommandParser = HighLevelCommandParser()
 
     private val bluetoothPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -303,7 +305,45 @@ class MainActivity : ComponentActivity(), SerialInterface.SerialListener, Blueto
 
     private fun handleHighLevelCommand(command: String) {
         addLog("BT high-level command: $command")
-        bluetoothServerManager.sendLine("ERR: high-level commands are not implemented yet")
+        when (val result = highLevelCommandParser.parse(command)) {
+            is HighLevelCommandParser.ParseResult.Success -> handleParsedHighLevelCommand(result.command)
+            is HighLevelCommandParser.ParseResult.Error -> {
+                addLog("BT high-level parse error: ${result.message}")
+                bluetoothServerManager.sendLine("ERR: ${result.message}")
+            }
+        }
+    }
+
+    private fun handleParsedHighLevelCommand(command: HighLevelCommand) {
+        when (command) {
+            HighLevelCommand.Stop -> executeHighLevelStop()
+        }
+    }
+
+    private fun executeHighLevelStop() {
+        pendingBluetoothResponse = null
+        serialReceiveBuffer.setLength(0)
+        addLog("HL stop requested")
+
+        val manager = serialManager
+        if (manager == null || !manager.isConnected) {
+            addLog("HL stop failed, serial is disconnected")
+            bluetoothServerManager.sendLine("ERR: serial disconnected")
+            return
+        }
+
+        val stopCommands = listOf(
+            "shoulder horizontal 0",
+            "shoulder vertical 0",
+            "wheels fb 0",
+            "wheels rl 0",
+            "grab 0",
+            "release 0"
+        )
+        stopCommands.forEach { command ->
+            sendSerialCommand(command, source = "HL")
+        }
+        bluetoothServerManager.sendLine("OK hl stop")
     }
 
     private fun sendSerialCommand(
@@ -448,112 +488,127 @@ private fun ServerScreen(
     modifier: Modifier = Modifier
 ) {
     val maxLogHeight = LocalConfiguration.current.screenHeightDp.dp / 2
+    val contentScrollState = rememberScrollState()
+    val logScrollState = rememberScrollState()
+
+    LaunchedEffect(logMessages.size, logScrollState.maxValue) {
+        logScrollState.animateScrollTo(logScrollState.maxValue)
+    }
 
     Column(
         modifier = modifier
             .fillMaxSize()
-            .padding(16.dp)
-            .verticalScroll(rememberScrollState()),
+            .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text("GabotApp", style = MaterialTheme.typography.headlineMedium)
-            Text(
-                "v${MainActivity.MAJOR_VER}.${MainActivity.MINOR_VER}.${MainActivity.MICRO_VER}",
-                style = MaterialTheme.typography.titleMedium
-            )
-        }
-        Text("BT 4.2+ classic RFCOMM serial-command server", style = MaterialTheme.typography.bodyMedium)
-        Text("Status: $statusText", style = MaterialTheme.typography.titleMedium)
-
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = onRefresh, enabled = !serialConnected && !isConnecting) {
-                Text("Refresh USB devices")
-            }
-            if (serialConnected) {
-                Button(onClick = onDisconnect) {
-                    Text("Disconnect")
-                }
-            } else {
-                Button(
-                    onClick = onConnect,
-                    enabled = devices.isNotEmpty() && !isConnecting
-                ) {
-                    Text(if (isConnecting) "Connecting" else "Connect")
-                }
-            }
-        }
-
-        Text("USB serial devices", style = MaterialTheme.typography.titleMedium)
-        if (devices.isEmpty()) {
-            Text("No USB serial devices found. Connect Arduino over USB OTG and refresh.")
-        } else {
-            devices.forEachIndexed { index, device ->
-                DeviceCard(
-                    device = device,
-                    selected = index == selectedDeviceIndex,
-                    enabled = !serialConnected && !isConnecting,
-                    onClick = { onSelectDevice(index) }
-                )
-            }
-        }
-
-        OutlinedTextField(
-            value = commandText,
-            onValueChange = onCommandChange,
-            modifier = Modifier.fillMaxWidth(),
-            label = { Text("Serial command") },
-            placeholder = { Text("version") },
-            singleLine = true,
-            enabled = serialConnected
-        )
-        Button(
-            onClick = onSend,
-            enabled = serialConnected && commandText.isNotBlank(),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Send")
-        }
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text("Log", style = MaterialTheme.typography.titleMedium)
-            TextButton(
-                onClick = onClearLog,
-                modifier = Modifier.height(32.dp),
-                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
-            ) {
-                Text("Clear")
-            }
-        }
-        Card(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(max = maxLogHeight)
+                .weight(1f)
+                .verticalScroll(contentScrollState),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Column(
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("GabotApp", style = MaterialTheme.typography.headlineMedium)
+                Text(
+                    "v${MainActivity.MAJOR_VER}.${MainActivity.MINOR_VER}.${MainActivity.MICRO_VER}",
+                    style = MaterialTheme.typography.titleMedium
+                )
+            }
+            Text("BT 4.2+ classic RFCOMM serial-command server", style = MaterialTheme.typography.bodyMedium)
+            Text("Status: $statusText", style = MaterialTheme.typography.titleMedium)
+
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = onRefresh, enabled = !serialConnected && !isConnecting) {
+                    Text("Refresh USB devices")
+                }
+                if (serialConnected) {
+                    Button(onClick = onDisconnect) {
+                        Text("Disconnect")
+                    }
+                } else {
+                    Button(
+                        onClick = onConnect,
+                        enabled = devices.isNotEmpty() && !isConnecting
+                    ) {
+                        Text(if (isConnecting) "Connecting" else "Connect")
+                    }
+                }
+            }
+
+            Text("USB serial devices", style = MaterialTheme.typography.titleMedium)
+            if (devices.isEmpty()) {
+                Text("No USB serial devices found. Connect Arduino over USB OTG and refresh.")
+            } else {
+                devices.forEachIndexed { index, device ->
+                    DeviceCard(
+                        device = device,
+                        selected = index == selectedDeviceIndex,
+                        enabled = !serialConnected && !isConnecting,
+                        onClick = { onSelectDevice(index) }
+                    )
+                }
+            }
+
+            OutlinedTextField(
+                value = commandText,
+                onValueChange = onCommandChange,
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("Serial command") },
+                placeholder = { Text("version") },
+                singleLine = true,
+                enabled = serialConnected
+            )
+            Button(
+                onClick = onSend,
+                enabled = serialConnected && commandText.isNotBlank(),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Send")
+            }
+        }
+
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Log", style = MaterialTheme.typography.titleMedium)
+                TextButton(
+                    onClick = onClearLog,
+                    modifier = Modifier.height(32.dp),
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+                ) {
+                    Text("Clear")
+                }
+            }
+            Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .verticalScroll(rememberScrollState())
-                    .padding(12.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
+                    .heightIn(max = maxLogHeight)
             ) {
-                if (logMessages.isEmpty()) {
-                    Text("No log entries", style = MaterialTheme.typography.bodyMedium)
-                } else {
-                    logMessages.takeLast(80).forEach { message ->
-                        Text(
-                            text = message,
-                            style = MaterialTheme.typography.bodySmall,
-                            fontFamily = FontFamily.Monospace
-                        )
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(logScrollState)
+                        .padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    if (logMessages.isEmpty()) {
+                        Text("No log entries", style = MaterialTheme.typography.bodyMedium)
+                    } else {
+                        logMessages.takeLast(80).forEach { message ->
+                            Text(
+                                text = message,
+                                style = MaterialTheme.typography.bodySmall,
+                                fontFamily = FontFamily.Monospace
+                            )
+                        }
                     }
                 }
             }

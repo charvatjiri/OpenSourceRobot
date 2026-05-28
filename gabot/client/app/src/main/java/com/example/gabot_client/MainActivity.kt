@@ -31,6 +31,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -231,92 +232,102 @@ private fun ClientScreen(
     modifier: Modifier = Modifier
 ) {
     val maxLogHeight = LocalConfiguration.current.screenHeightDp.dp / 2
+    val contentScrollState = rememberScrollState()
 
     Column(
         modifier = modifier
             .fillMaxSize()
-            .padding(16.dp)
-            .verticalScroll(rememberScrollState()),
+            .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+                .verticalScroll(contentScrollState),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Text("GabotClient", style = MaterialTheme.typography.headlineMedium)
-            Text(
-                "v${BuildConfig.MAJOR_VER}.${BuildConfig.MINOR_VER}.${BuildConfig.MICRO_VER}",
-                style = MaterialTheme.typography.titleMedium
-            )
-        }
-        Text("BT 4.2+ classic RFCOMM serial-command client", style = MaterialTheme.typography.bodyMedium)
-        Text("Status: $statusText", style = MaterialTheme.typography.titleMedium)
-
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = onRefresh, enabled = !connected) {
-                Text("Refresh paired devices")
-            }
-            if (connected) {
-                Button(onClick = onDisconnect) {
-                    Text("Disconnect")
-                }
-            } else {
-                Button(onClick = onConnect, enabled = selectedDevice != null) {
-                    Text("Connect")
-                }
-            }
-        }
-
-        Text("Paired devices", style = MaterialTheme.typography.titleMedium)
-        if (devices.isEmpty()) {
-            Text("No paired devices. Pair this phone with the GabotApp phone in Android Bluetooth settings first.")
-        } else {
-            devices.forEach { device ->
-                DeviceCard(
-                    device = device,
-                    selected = device.address == selectedDevice?.address,
-                    enabled = !connected,
-                    onClick = { onSelectDevice(device) }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("GabotClient", style = MaterialTheme.typography.headlineMedium)
+                Text(
+                    "v${BuildConfig.MAJOR_VER}.${BuildConfig.MINOR_VER}.${BuildConfig.MICRO_VER}",
+                    style = MaterialTheme.typography.titleMedium
                 )
             }
-        }
+            Text("BT 4.2+ classic RFCOMM serial-command client", style = MaterialTheme.typography.bodyMedium)
+            Text("Status: $statusText", style = MaterialTheme.typography.titleMedium)
 
-        OutlinedTextField(
-            value = commandText,
-            onValueChange = onCommandChange,
-            modifier = Modifier.fillMaxWidth(),
-            label = { Text("Serial command") },
-            placeholder = { Text("version") },
-            singleLine = true,
-            enabled = connected
-        )
-        Button(
-            onClick = onSend,
-            enabled = connected && commandText.isNotBlank(),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Send command")
-        }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = onRefresh, enabled = !connected) {
+                    Text("Refresh paired devices")
+                }
+                if (connected) {
+                    Button(onClick = onDisconnect) {
+                        Text("Disconnect")
+                    }
+                } else {
+                    Button(onClick = onConnect, enabled = selectedDevice != null) {
+                        Text("Connect")
+                    }
+                }
+            }
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text("Log", style = MaterialTheme.typography.titleMedium)
-            TextButton(
-                onClick = onClearLog,
-                modifier = Modifier.height(32.dp),
-                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+            Text("Paired devices", style = MaterialTheme.typography.titleMedium)
+            if (devices.isEmpty()) {
+                Text("No paired devices. Pair this phone with the GabotApp phone in Android Bluetooth settings first.")
+            } else {
+                devices.forEach { device ->
+                    DeviceCard(
+                        device = device,
+                        selected = device.address == selectedDevice?.address,
+                        enabled = !connected,
+                        onClick = { onSelectDevice(device) }
+                    )
+                }
+            }
+
+            OutlinedTextField(
+                value = commandText,
+                onValueChange = onCommandChange,
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("Serial command") },
+                placeholder = { Text("version") },
+                singleLine = true,
+                enabled = connected
+            )
+            Button(
+                onClick = onSend,
+                enabled = connected && commandText.isNotBlank(),
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Text("Clear")
+                Text("Send command")
             }
         }
-        LogView(
-            logMessages = logMessages,
-            modifier = Modifier.heightIn(max = maxLogHeight)
-        )
+
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Log", style = MaterialTheme.typography.titleMedium)
+                TextButton(
+                    onClick = onClearLog,
+                    modifier = Modifier.height(32.dp),
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+                ) {
+                    Text("Clear")
+                }
+            }
+            LogView(
+                logMessages = logMessages,
+                modifier = Modifier.heightIn(max = maxLogHeight)
+            )
+        }
     }
 }
 
@@ -350,11 +361,17 @@ private fun DeviceCard(
 
 @Composable
 private fun LogView(logMessages: List<String>, modifier: Modifier = Modifier) {
+    val logScrollState = rememberScrollState()
+
+    LaunchedEffect(logMessages.size, logScrollState.maxValue) {
+        logScrollState.animateScrollTo(logScrollState.maxValue)
+    }
+
     Card(modifier = modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(logScrollState)
                 .padding(12.dp)
         ) {
             if (logMessages.isEmpty()) {
