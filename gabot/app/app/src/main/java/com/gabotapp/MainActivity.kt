@@ -44,12 +44,10 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -71,6 +69,7 @@ class MainActivity : ComponentActivity(), SerialInterface.SerialListener, Blueto
         val MICRO_VER = BuildConfig.MICRO_VER
         private const val SERIAL_COMMAND_TERMINATOR = "\n"
         private const val HIGH_LEVEL_COMMAND_PREFIX = HighLevelCommandParser.HIGH_LEVEL_PREFIX
+        private const val VISION_RESULT_MAX_AGE_NS = 2_000_000_000L
     }
 
     private var serialManager: SerialInterface? = null
@@ -83,11 +82,15 @@ class MainActivity : ComponentActivity(), SerialInterface.SerialListener, Blueto
     private var isConnecting by mutableStateOf(false)
     private var statusText by mutableStateOf("Disconnected")
     private var cameraPermissionGranted by mutableStateOf(false)
+    private var visionResult by mutableStateOf(VisionModule.Result.EMPTY)
+    private var visionAnalysisStarted = false
     private val logMessages = mutableStateListOf<String>()
     private val serialReceiveBuffer = StringBuilder()
     private var pendingBluetoothResponse: ExpectedBluetoothResponse? = null
     private val highLevelCommandParser = HighLevelCommandParser()
     private lateinit var serialCommandExecutor: SerialCommandExecutor
+    private lateinit var highLevelController: HighLevelController
+    private lateinit var visionModule: VisionModule
 
     private val bluetoothPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -114,14 +117,24 @@ class MainActivity : ComponentActivity(), SerialInterface.SerialListener, Blueto
     ) { granted ->
         cameraPermissionGranted = granted
         addLog(if (granted) "Camera permission granted" else "Camera permission denied")
+        if (granted) {
+            startVisionAnalysis()
+        } else if (::highLevelController.isInitialized) {
+            highLevelController.cancel("camera permission denied", failStop = true)
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         initSerialCommandExecutor()
+        initHighLevelController()
+        initVisionModule()
         initSerialManager()
         initBluetoothServer()
         cameraPermissionGranted = hasCameraPermission()
+        if (cameraPermissionGranted) {
+            startVisionAnalysis()
+        }
 
         enableEdgeToEdge()
         setContent {
@@ -136,6 +149,8 @@ class MainActivity : ComponentActivity(), SerialInterface.SerialListener, Blueto
                         commandText = commandText,
                         logMessages = logMessages,
                         cameraPermissionGranted = cameraPermissionGranted,
+                        visionModule = visionModule,
+                        visionResult = visionResult,
                         onRequestCameraPermission = ::requestCameraPermission,
                         onRefresh = ::refreshDevices,
                         onSelectDevice = { selectedDeviceIndex = it },
@@ -160,6 +175,59 @@ class MainActivity : ComponentActivity(), SerialInterface.SerialListener, Blueto
         refreshDevices()
     }
 
+    private fun initVisionModule() {
+        visionModule = CameraXVisionModule { result ->
+            runOnUiThread { visionResult = result }
+        }
+    }
+
+    private fun startVisionAnalysis() {
+        if (visionAnalysisStarted || !cameraPermissionGranted) {
+            return
+        }
+        val cameraProviderFuture = ProcessCameraProvider.getInstance(this)
+        cameraProviderFuture.addListener(
+            {
+                runCatching {
+                    cameraProviderFuture.get().bindToLifecycle(
+                        this,
+                        CameraSelector.DEFAULT_BACK_CAMERA,
+                        visionModule.imageAnalysis
+                    )
+                    visionAnalysisStarted = true
+                    addLog("Camera analysis started")
+                }.onFailure { error ->
+                    addLog("Camera analysis failed: ${error.message ?: error.javaClass.simpleName}")
+                }
+            },
+            ContextCompat.getMainExecutor(this)
+        )
+    }
+
+    private fun initHighLevelController() {
+        highLevelController = HighLevelController(
+            planner = CommandPlanner(),
+            serialExecutor = serialCommandExecutor,
+            stateProvider = {
+                RobotState(
+                    serialConnected = serialManager?.isConnected == true,
+                    bluetoothClientConnected = ::bluetoothServerManager.isInitialized &&
+                        bluetoothServerManager.hasClientConnection(),
+                    cameraAvailable = cameraPermissionGranted && isVisionResultFresh(),
+                    visionResult = visionResult
+                )
+            },
+            sendResponse = { response -> bluetoothServerManager.sendLine(response) },
+            onLog = ::addLog
+        )
+    }
+
+    private fun isVisionResultFresh(): Boolean {
+        val timestamp = visionResult.timestampNanos
+        return visionResult.frameWidth > 0 && timestamp > 0L &&
+            System.nanoTime() - timestamp <= VISION_RESULT_MAX_AGE_NS
+    }
+
     private fun initBluetoothServer() {
         bluetoothServerManager = BluetoothServerManager(this)
         bluetoothServerManager.listener = this
@@ -171,7 +239,7 @@ class MainActivity : ComponentActivity(), SerialInterface.SerialListener, Blueto
             sendCommand = { command -> sendSerialCommand(command, source = "HL") },
             sendFailStopCommand = { command -> sendSerialCommand(command, source = "HL fail-stop") },
             onLog = ::addLog,
-            onComplete = ::handleSerialExecutionResult
+            onComplete = { result -> addLog("Unexpected serial execution result: $result") }
         )
     }
 
@@ -252,6 +320,10 @@ class MainActivity : ComponentActivity(), SerialInterface.SerialListener, Blueto
             return
         }
 
+        if (highLevelController.isActive) {
+            addLog("UI command rejected: high-level controller busy")
+            return
+        }
         sendSerialCommand(message, source = "UI")
     }
 
@@ -287,7 +359,7 @@ class MainActivity : ComponentActivity(), SerialInterface.SerialListener, Blueto
         if (!connected) {
             serialReceiveBuffer.setLength(0)
             pendingBluetoothResponse = null
-            serialCommandExecutor.cancel("serial disconnected")
+            highLevelController.cancel("serial disconnected", failStop = false)
         }
         sendBluetoothInfo(if (connected) "serial connected" else "serial disconnected")
         addLog(if (connected) "Connected successfully" else "Connection closed")
@@ -307,6 +379,8 @@ class MainActivity : ComponentActivity(), SerialInterface.SerialListener, Blueto
     }
 
     override fun onDestroy() {
+        highLevelController.cancel("activity destroyed", failStop = false)
+        visionModule.close()
         serialCommandExecutor.destroy()
         bluetoothServerManager.stop()
         serialManager?.destroy()
@@ -326,7 +400,7 @@ class MainActivity : ComponentActivity(), SerialInterface.SerialListener, Blueto
 
     override fun onClientDisconnected() {
         pendingBluetoothResponse = null
-        serialCommandExecutor.cancelAndFailStop("bluetooth client disconnected")
+        highLevelController.cancel("bluetooth client disconnected", failStop = true)
         Log.d(TAG, "Bluetooth client disconnected")
         addLog("Bluetooth client disconnected")
     }
@@ -342,6 +416,10 @@ class MainActivity : ComponentActivity(), SerialInterface.SerialListener, Blueto
         if (normalizedMessage.startsWith(HIGH_LEVEL_COMMAND_PREFIX)) {
             handleHighLevelCommand(normalizedMessage)
         } else {
+            if (highLevelController.isActive) {
+                bluetoothServerManager.sendLine("ERR: high-level controller busy")
+                return
+            }
             pendingBluetoothResponse = ExpectedBluetoothResponse.forCommand(normalizedMessage)
             Log.d(TAG, "BT->Serial: $normalizedMessage")
             if (!sendSerialCommand(normalizedMessage, source = "BT", notifyBluetoothOnError = true)) {
@@ -353,50 +431,10 @@ class MainActivity : ComponentActivity(), SerialInterface.SerialListener, Blueto
     private fun handleHighLevelCommand(command: String) {
         addLog("BT high-level command: $command")
         when (val result = highLevelCommandParser.parse(command)) {
-            is HighLevelCommandParser.ParseResult.Success -> handleParsedHighLevelCommand(result.command)
+            is HighLevelCommandParser.ParseResult.Success -> highLevelController.handle(result.command)
             is HighLevelCommandParser.ParseResult.Error -> {
                 addLog("BT high-level parse error: ${result.message}")
                 bluetoothServerManager.sendLine("ERR: ${result.message}")
-            }
-        }
-    }
-
-    private fun handleParsedHighLevelCommand(command: HighLevelCommand) {
-        when (command) {
-            HighLevelCommand.Stop -> executeHighLevelStop()
-        }
-    }
-
-    private fun executeHighLevelStop() {
-        pendingBluetoothResponse = null
-        serialReceiveBuffer.setLength(0)
-        addLog("HL stop requested")
-
-        val manager = serialManager
-        if (manager == null || !manager.isConnected) {
-            addLog("HL stop failed, serial is disconnected")
-            bluetoothServerManager.sendLine("ERR: serial disconnected")
-            return
-        }
-
-        if (!serialCommandExecutor.execute("hl stop", SerialCommandExecutor.STOP_COMMANDS)) {
-            bluetoothServerManager.sendLine("ERR: serial executor busy")
-        }
-    }
-
-    private fun handleSerialExecutionResult(result: SerialCommandExecutor.ExecutionResult) {
-        when (result) {
-            SerialCommandExecutor.ExecutionResult.Success -> {
-                bluetoothServerManager.sendLine("OK hl stop")
-            }
-            is SerialCommandExecutor.ExecutionResult.Error -> {
-                bluetoothServerManager.sendLine("ERR: ${result.response}")
-            }
-            is SerialCommandExecutor.ExecutionResult.Timeout -> {
-                bluetoothServerManager.sendLine("ERR: timeout waiting for ${result.command}")
-            }
-            is SerialCommandExecutor.ExecutionResult.SendFailed -> {
-                bluetoothServerManager.sendLine("ERR: failed to send ${result.command}")
             }
         }
     }
@@ -531,6 +569,7 @@ class MainActivity : ComponentActivity(), SerialInterface.SerialListener, Blueto
             }
         }
     }
+
 }
 
 @Composable
@@ -543,6 +582,8 @@ private fun ServerScreen(
     commandText: String,
     logMessages: List<String>,
     cameraPermissionGranted: Boolean,
+    visionModule: VisionModule,
+    visionResult: VisionModule.Result,
     onRequestCameraPermission: () -> Unit,
     onRefresh: () -> Unit,
     onSelectDevice: (Int) -> Unit,
@@ -605,6 +646,8 @@ private fun ServerScreen(
             1 -> CameraTab(
                 logMessages = logMessages,
                 cameraPermissionGranted = cameraPermissionGranted,
+                visionModule = visionModule,
+                visionResult = visionResult,
                 onRequestCameraPermission = onRequestCameraPermission,
                 onClearLog = onClearLog,
                 modifier = Modifier.weight(1f)
@@ -710,6 +753,8 @@ private fun ControlTab(
 private fun CameraTab(
     logMessages: List<String>,
     cameraPermissionGranted: Boolean,
+    visionModule: VisionModule,
+    visionResult: VisionModule.Result,
     onRequestCameraPermission: () -> Unit,
     onClearLog: () -> Unit,
     modifier: Modifier = Modifier
@@ -722,6 +767,8 @@ private fun CameraTab(
     ) {
         CameraPreviewCard(
             cameraPermissionGranted = cameraPermissionGranted,
+            visionModule = visionModule,
+            visionResult = visionResult,
             onRequestCameraPermission = onRequestCameraPermission,
             modifier = Modifier
                 .fillMaxWidth()
@@ -740,12 +787,22 @@ private fun CameraTab(
 @Composable
 private fun CameraPreviewCard(
     cameraPermissionGranted: Boolean,
+    visionModule: VisionModule,
+    visionResult: VisionModule.Result,
     onRequestCameraPermission: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Card(modifier = modifier) {
         if (cameraPermissionGranted) {
-            CameraPreview(modifier = Modifier.fillMaxSize())
+            Column(modifier = Modifier.fillMaxSize()) {
+                CameraPreview(
+                    visionModule = visionModule,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                )
+                VisionStatus(visionResult)
+            }
         } else {
             Column(
                 modifier = Modifier
@@ -764,16 +821,26 @@ private fun CameraPreviewCard(
 }
 
 @Composable
-private fun CameraPreview(modifier: Modifier = Modifier) {
+private fun VisionStatus(result: VisionModule.Result) {
+    val status = if (result.objectVisible) "visible" else "not visible"
+    Text(
+        text = "Object: $status | x %.2f | y %.2f | confidence %.2f".format(
+            result.centerX,
+            result.centerY,
+            result.confidence
+        ),
+        modifier = Modifier.padding(8.dp),
+        style = MaterialTheme.typography.bodySmall
+    )
+}
+
+@Composable
+private fun CameraPreview(
+    visionModule: VisionModule,
+    modifier: Modifier = Modifier
+) {
     val context = LocalContext.current
     val lifecycleOwner = context as LifecycleOwner
-    val visionModule = remember { CameraXVisionModule() }
-
-    DisposableEffect(visionModule) {
-        onDispose {
-            visionModule.close()
-        }
-    }
 
     AndroidView(
         modifier = modifier,

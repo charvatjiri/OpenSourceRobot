@@ -5,8 +5,8 @@ plugins {
 }
 
 val majorVer = 0
-val minorVer = 5
-val microVer = 9
+val minorVer = 7
+val microVer = 0
 
 android {
     namespace = "com.gabotapp"
@@ -75,6 +75,7 @@ dependencies {
     implementation(libs.androidx.camera.lifecycle)
     implementation(libs.androidx.camera.view)
     testImplementation(libs.junit)
+    testImplementation(libs.json)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))

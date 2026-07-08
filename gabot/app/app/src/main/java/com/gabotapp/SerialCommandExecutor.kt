@@ -11,22 +11,38 @@ class SerialCommandExecutor(
     private val timeoutMs: Long = DEFAULT_TIMEOUT_MS
 ) {
     private val handler = Handler(Looper.getMainLooper())
-    private val queue = ArrayDeque<String>()
-    private var activeCommand: String? = null
-    private var activeLabel: String = ""
+    private val queue = ArrayDeque<PlannedCommand>()
+    private var activeCommand: PlannedCommand? = null
+    private var activeLabel = ""
     private var active = false
+    private var currentStep = 0
+    private var totalSteps = 0
+    private var progressCallback: (Int, Int, PlannedCommand) -> Unit = { _, _, _ -> }
+    private var completionCallback: (ExecutionResult) -> Unit = onComplete
+    private var pendingAdvance: Runnable? = null
 
     private val timeoutRunnable = Runnable {
-        val timedOutCommand = activeCommand ?: return@Runnable
+        val timedOutCommand = activeCommand?.command ?: return@Runnable
         onLog("Serial executor timeout: $timedOutCommand")
+        val callback = completionCallback
         clearActiveState()
         sendFailStopCommands()
-        onComplete(ExecutionResult.Timeout(timedOutCommand))
+        callback(ExecutionResult.Timeout(timedOutCommand))
     }
 
-    fun execute(label: String, commands: List<String>): Boolean {
-        if (commands.isEmpty()) {
-            onComplete(ExecutionResult.Success)
+    fun execute(label: String, commands: List<String>): Boolean = executePlan(
+        plan = CommandPlan(label, commands.map(::PlannedCommand)),
+        onProgress = { _, _, _ -> },
+        onPlanComplete = onComplete
+    )
+
+    fun executePlan(
+        plan: CommandPlan,
+        onProgress: (step: Int, total: Int, command: PlannedCommand) -> Unit,
+        onPlanComplete: (ExecutionResult) -> Unit
+    ): Boolean {
+        if (plan.commands.isEmpty()) {
+            onPlanComplete(ExecutionResult.Success)
             return true
         }
         if (active) {
@@ -35,26 +51,31 @@ class SerialCommandExecutor(
         }
 
         active = true
-        activeLabel = label
+        activeLabel = plan.label
+        currentStep = 0
+        totalSteps = plan.commands.size
+        progressCallback = onProgress
+        completionCallback = onPlanComplete
         queue.clear()
-        queue.addAll(commands)
-        onLog("Serial executor start: $label (${commands.size} command(s))")
+        queue.addAll(plan.commands)
+        onLog("Serial executor start: ${plan.label} (${plan.commands.size} command(s))")
         return sendNext()
     }
 
     fun onSerialLine(line: String): Boolean {
-        val command = activeCommand ?: return false
+        val plannedCommand = activeCommand ?: return false
+        val command = plannedCommand.command
         if (line.startsWith("OK", ignoreCase = true)) {
             handler.removeCallbacks(timeoutRunnable)
+            activeCommand = null
             onLog("Serial executor OK for '$command': $line")
-            sendNext()
+            scheduleNext(plannedCommand.delayAfterSuccessMs)
             return true
         }
         if (line.startsWith("ERR", ignoreCase = true)) {
             handler.removeCallbacks(timeoutRunnable)
             onLog("Serial executor ERR for '$command': $line")
-            clearActiveState()
-            onComplete(ExecutionResult.Error(command, line))
+            finish(ExecutionResult.Error(command, line))
             return true
         }
         return false
@@ -77,26 +98,46 @@ class SerialCommandExecutor(
         clearActiveState()
     }
 
+    private fun scheduleNext(delayMs: Long) {
+        if (delayMs <= 0L) {
+            sendNext()
+            return
+        }
+        val advance = Runnable {
+            pendingAdvance = null
+            if (active) {
+                sendNext()
+            }
+        }
+        pendingAdvance = advance
+        handler.postDelayed(advance, delayMs)
+    }
+
     private fun sendNext(): Boolean {
         val nextCommand = queue.removeFirstOrNull()
         if (nextCommand == null) {
             val completedLabel = activeLabel
-            clearActiveState()
             onLog("Serial executor complete: $completedLabel")
-            onComplete(ExecutionResult.Success)
+            finish(ExecutionResult.Success)
             return true
         }
 
         activeCommand = nextCommand
-        if (!sendCommand(nextCommand)) {
-            val failedCommand = nextCommand
-            clearActiveState()
-            onComplete(ExecutionResult.SendFailed(failedCommand))
+        currentStep++
+        progressCallback(currentStep, totalSteps, nextCommand)
+        if (!sendCommand(nextCommand.command)) {
+            finish(ExecutionResult.SendFailed(nextCommand.command))
             return false
         }
         handler.removeCallbacks(timeoutRunnable)
         handler.postDelayed(timeoutRunnable, timeoutMs)
         return true
+    }
+
+    private fun finish(result: ExecutionResult) {
+        val callback = completionCallback
+        clearActiveState()
+        callback(result)
     }
 
     private fun sendFailStopCommands() {
@@ -107,10 +148,16 @@ class SerialCommandExecutor(
 
     private fun clearActiveState() {
         handler.removeCallbacks(timeoutRunnable)
+        pendingAdvance?.let(handler::removeCallbacks)
+        pendingAdvance = null
         queue.clear()
         activeCommand = null
         activeLabel = ""
         active = false
+        currentStep = 0
+        totalSteps = 0
+        progressCallback = { _, _, _ -> }
+        completionCallback = onComplete
     }
 
     sealed class ExecutionResult {
