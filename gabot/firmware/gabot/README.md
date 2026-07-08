@@ -64,7 +64,7 @@ Connect at **115200 baud**, commands are terminated by `\n` or `\r`.
 
 | Command                        | Description                              | Response          |
 |--------------------------------|------------------------------------------|-------------------|
-| `get version`                  | Returns firmware version                 | `0.1.0`           |
+| `get version` / `version`      | Returns firmware version                 | `3.1.4`           |
 | `grab <0-255>`                 | Activate finger grab (0 = ON)            | `OK grab <value>` |
 | `release <0-255>`              | Activate finger release (0 = ON)         | `OK release <value>` |
 | `motor f <position>`           | Set finger servo F position (degrees)    | `OK motor <pos>`  |
@@ -74,6 +74,7 @@ Connect at **115200 baud**, commands are terminated by `\n` or `\r`.
 | `shoulder vertical <-255…255>`   | Drive shoulder Up (+) / Down (-) by speed   | `OK shoulder vertical <speed>`   |
 
 Commands are case-insensitive. Unknown commands return `ERR: unknown command: <cmd>`.
+Commands must be printable ASCII, contain at most 96 characters, and use strict integer arguments.
 
 ### Examples
 

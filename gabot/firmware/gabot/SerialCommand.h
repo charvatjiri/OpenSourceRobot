@@ -16,6 +16,8 @@ typedef enum {
 class SerialCommand
 {
 public:
+    static const size_t MAX_COMMAND_LENGTH = 96;
+
     SerialCommand(Fingers& fingers, int verMajor, int verMinor, int verMicro);
     ~SerialCommand();
 
@@ -37,6 +39,7 @@ private:
     int cmdShoulderVertical(String args);
     int cmdWheelsRL(String args);
     int cmdWheelsFB(String args);
+    bool parseInteger(const String& args, int& value);
 
     Fingers& m_fingers;
     Servo* m_motorF;
@@ -52,6 +55,7 @@ private:
     char* m_elementFB;
 
     String m_buffer;
+    bool m_discardInput;
     int m_verMajor;
     int m_verMinor;
     int m_verMicro;

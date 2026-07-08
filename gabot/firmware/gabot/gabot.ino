@@ -201,7 +201,8 @@ void loop(void) {
       buzz_count = 100;
     }
   }
-
+  wdt_reset();
+  
   // Timers - every 100ms updates
   if (millis() - time_now > 100) {
     time_now = millis();
@@ -209,7 +210,7 @@ void loop(void) {
     GabotAngle.ReadAngle();
     GabotOvercurrent.Update();
     float voltage;
-    if (voltage = GabotBattery.Update()) {
+    if ((voltage = GabotBattery.Update())) {
         Serial.print("baterry voltage = ");
         Serial.print(voltage);
         Serial.println(" V");

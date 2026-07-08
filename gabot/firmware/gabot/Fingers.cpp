@@ -49,9 +49,6 @@ void Fingers::TestPrint()
 
 void Fingers::DoRelease(byte value)
 {
-    Serial.print("Grab releasing...  ");
-    Serial.println(value);
-
     if (m_useHBridge) {
         digitalWrite(m_FmotHG, LOW);
         digitalWrite(m_FmotLG, LOW);
@@ -66,9 +63,6 @@ void Fingers::DoRelease(byte value)
 
 void Fingers::DoGrab(byte value)
 {
-    Serial.print("Fingers::DoGrab    ");
-    Serial.println(value);
-
     if (m_useHBridge) {
         digitalWrite(m_FmotHR, LOW);
         digitalWrite(m_FmotLR, LOW);
