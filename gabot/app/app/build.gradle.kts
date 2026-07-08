@@ -6,7 +6,7 @@ plugins {
 
 val majorVer = 0
 val minorVer = 5
-val microVer = 8
+val microVer = 9
 
 android {
     namespace = "com.gabotapp"

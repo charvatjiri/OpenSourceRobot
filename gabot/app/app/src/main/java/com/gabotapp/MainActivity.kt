@@ -44,10 +44,12 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -765,6 +767,13 @@ private fun CameraPreviewCard(
 private fun CameraPreview(modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val lifecycleOwner = context as LifecycleOwner
+    val visionModule = remember { CameraXVisionModule() }
+
+    DisposableEffect(visionModule) {
+        onDispose {
+            visionModule.close()
+        }
+    }
 
     AndroidView(
         modifier = modifier,
@@ -785,7 +794,8 @@ private fun CameraPreview(modifier: Modifier = Modifier) {
                     cameraProvider.bindToLifecycle(
                         lifecycleOwner,
                         CameraSelector.DEFAULT_BACK_CAMERA,
-                        preview
+                        preview,
+                        visionModule.imageAnalysis
                     )
                 },
                 ContextCompat.getMainExecutor(context)
