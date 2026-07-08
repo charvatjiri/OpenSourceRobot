@@ -22,6 +22,11 @@ class HighLevelCommandParserTest {
             success("hl:{\"action\":\"look\",\"direction\":\"left\"}")
         )
         assertEquals(HighLevelCommand.Stop, success("hl:{\"action\":\"stop\"}"))
+        assertEquals(HighLevelCommand.Stop, success("hl:stop"))
+        assertEquals(
+            HighLevelCommand.GoTo("visible_object", null),
+            success("hl:{\"action\":\"goto\",\"target\":\"visible_object\"}")
+        )
     }
 
     @Test
@@ -29,6 +34,7 @@ class HighLevelCommandParserTest {
         assertTrue(parser.parse("hl:{\"action\":\"collect\"}") is HighLevelCommandParser.ParseResult.Error)
         assertTrue(parser.parse("hl:{\"action\":\"look\",\"direction\":\"up\"}") is HighLevelCommandParser.ParseResult.Error)
         assertTrue(parser.parse("hl:not-json") is HighLevelCommandParser.ParseResult.Error)
+        assertTrue(parser.parse("hl:{\"action\":\"dance\"}") is HighLevelCommandParser.ParseResult.Error)
     }
 
     private fun success(message: String): HighLevelCommand {

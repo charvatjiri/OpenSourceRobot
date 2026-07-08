@@ -5,7 +5,7 @@ plugins {
 }
 
 val majorVer = 0
-val minorVer = 7
+val minorVer = 8
 val microVer = 0
 
 android {

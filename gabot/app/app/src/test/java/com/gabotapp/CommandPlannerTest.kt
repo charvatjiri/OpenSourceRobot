@@ -63,6 +63,29 @@ class CommandPlannerTest {
         assertTrue(planner.plan(command, state(serialConnected = false)) is PlanningResult.Error)
     }
 
+    @Test
+    fun lowConfidenceResultUsesSearchPlan() {
+        val lowConfidenceState = state().copy(
+            visionResult = state().visionResult.copy(confidence = 0.1f)
+        )
+
+        val result = execute(HighLevelCommand.Collect("apple"), lowConfidenceState)
+
+        assertTrue(result.plan.countsAsSearchAttempt)
+        assertTrue(result.plan.replanAfterCompletion)
+    }
+
+    @Test
+    fun lookPlanTurnsShoulderAndStopsIt() {
+        val result = execute(
+            HighLevelCommand.Look(HighLevelCommand.Direction.RIGHT),
+            state(cameraAvailable = false)
+        )
+
+        assertEquals("shoulder horizontal 40", result.plan.commands.first().command)
+        assertEquals("shoulder horizontal 0", result.plan.commands.last().command)
+    }
+
     private fun execute(command: HighLevelCommand, state: RobotState): PlanningResult.Execute {
         val result = planner.plan(command, state)
         assertTrue(result is PlanningResult.Execute)

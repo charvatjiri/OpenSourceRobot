@@ -3,14 +3,31 @@ package com.gabotapp
 import android.os.Handler
 import android.os.Looper
 
+interface CommandScheduler {
+    fun postDelayed(task: Runnable, delayMs: Long)
+    fun cancel(task: Runnable)
+}
+
+private class AndroidCommandScheduler : CommandScheduler {
+    private val handler = Handler(Looper.getMainLooper())
+
+    override fun postDelayed(task: Runnable, delayMs: Long) {
+        handler.postDelayed(task, delayMs)
+    }
+
+    override fun cancel(task: Runnable) {
+        handler.removeCallbacks(task)
+    }
+}
+
 class SerialCommandExecutor(
     private val sendCommand: (String) -> Boolean,
     private val sendFailStopCommand: (String) -> Boolean,
     private val onLog: (String) -> Unit,
     private val onComplete: (ExecutionResult) -> Unit,
-    private val timeoutMs: Long = DEFAULT_TIMEOUT_MS
+    private val timeoutMs: Long = DEFAULT_TIMEOUT_MS,
+    private val scheduler: CommandScheduler = AndroidCommandScheduler()
 ) {
-    private val handler = Handler(Looper.getMainLooper())
     private val queue = ArrayDeque<PlannedCommand>()
     private var activeCommand: PlannedCommand? = null
     private var activeLabel = ""
@@ -66,14 +83,14 @@ class SerialCommandExecutor(
         val plannedCommand = activeCommand ?: return false
         val command = plannedCommand.command
         if (line.startsWith("OK", ignoreCase = true)) {
-            handler.removeCallbacks(timeoutRunnable)
+            scheduler.cancel(timeoutRunnable)
             activeCommand = null
             onLog("Serial executor OK for '$command': $line")
             scheduleNext(plannedCommand.delayAfterSuccessMs)
             return true
         }
         if (line.startsWith("ERR", ignoreCase = true)) {
-            handler.removeCallbacks(timeoutRunnable)
+            scheduler.cancel(timeoutRunnable)
             onLog("Serial executor ERR for '$command': $line")
             finish(ExecutionResult.Error(command, line))
             return true
@@ -110,7 +127,7 @@ class SerialCommandExecutor(
             }
         }
         pendingAdvance = advance
-        handler.postDelayed(advance, delayMs)
+        scheduler.postDelayed(advance, delayMs)
     }
 
     private fun sendNext(): Boolean {
@@ -129,8 +146,8 @@ class SerialCommandExecutor(
             finish(ExecutionResult.SendFailed(nextCommand.command))
             return false
         }
-        handler.removeCallbacks(timeoutRunnable)
-        handler.postDelayed(timeoutRunnable, timeoutMs)
+        scheduler.cancel(timeoutRunnable)
+        scheduler.postDelayed(timeoutRunnable, timeoutMs)
         return true
     }
 
@@ -147,8 +164,8 @@ class SerialCommandExecutor(
     }
 
     private fun clearActiveState() {
-        handler.removeCallbacks(timeoutRunnable)
-        pendingAdvance?.let(handler::removeCallbacks)
+        scheduler.cancel(timeoutRunnable)
+        pendingAdvance?.let(scheduler::cancel)
         pendingAdvance = null
         queue.clear()
         activeCommand = null
