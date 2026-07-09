@@ -55,6 +55,7 @@ $pytestArgs = $pythonCmd + @(
     "-m",
     "pytest",
     "--rootdir=$RootDir",
+    "--capture=tee-sys",
     "-o",
     "cache_dir=$(Join-Path $RootDir '.pytest_cache')",
     (Join-Path $RootDir "tests/firmware")

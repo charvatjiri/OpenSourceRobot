@@ -59,7 +59,7 @@ def test_invalid_numeric_argument_returns_error(command: str, serial_session) ->
 
 def test_command_too_long_and_parser_recovers(serial_session) -> None:
     response = serial_session.command(
-        "x" * 120,
+        "x" * 97,
         predicate=lambda line: line.startswith("ERR:"),
     )
     assert response == "ERR: command too long"

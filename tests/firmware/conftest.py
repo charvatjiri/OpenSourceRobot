@@ -34,6 +34,12 @@ TEST_FILE_ORDER = {
     "test_shoulder.py": 3,
     "test_wheels.py": 4,
 }
+TEST_NAME_ORDER = {
+    "test_command_too_long_and_parser_recovers": 0,
+    "test_get_version": 1,
+    "test_unknown_command": 2,
+    "test_invalid_numeric_argument_returns_error": 3,
+}
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:
@@ -78,6 +84,7 @@ def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
         key=lambda item: (
             TEST_FILE_ORDER.get(item.path.name, 999),
             item.path.name,
+            TEST_NAME_ORDER.get(item.originalname or item.name, 999),
             item.name,
         )
     )
@@ -87,14 +94,38 @@ def _is_noise_line(line: str) -> bool:
     return line in BOOT_MESSAGES or line.startswith(NOISE_PREFIXES)
 
 
-def _restore_command(serial_session: "SerialProtocolSession", command: str, expected: str) -> None:
+def _last_command_value(command: str) -> int:
+    return int(command.rsplit(maxsplit=1)[1])
+
+
+def _announce(message: str) -> None:
+    # Use explicit progress messages because these tests move real hardware.
+    print(f"\n[firmware-test] {message}", flush=True)
+
+
+def _restore_command(
+    serial_session: "SerialProtocolSession",
+    command: str,
+    expected: str,
+    *,
+    phase: str,
+) -> None:
+    position = _last_command_value(command)
+    _announce(f"{phase} servo position: {command} (position {position})")
     response = serial_session.command(command)
     assert response == expected
 
 
 class SerialProtocolSession:
     def __init__(self, port: str, baudrate: int, timeout: float, command_timeout: float) -> None:
-        self.serial = serial.Serial(port, baudrate=baudrate, timeout=timeout)
+        self.poll_interval = min(0.02, max(0.001, timeout / 10))
+        self._rx_buffer = bytearray()
+        self.serial = serial.Serial(
+            port,
+            baudrate=baudrate,
+            timeout=0,
+            write_timeout=timeout,
+        )
         self.command_timeout = command_timeout
 
     def close(self) -> None:
@@ -108,13 +139,29 @@ class SerialProtocolSession:
     def read_available_lines(self) -> list[str]:
         lines: list[str] = []
         while True:
-            raw = self.serial.readline()
-            if not raw:
+            line = self._read_line_until(time.monotonic() + self.poll_interval)
+            if line is None:
                 break
-            line = raw.decode("utf-8", errors="replace").strip()
             if line:
                 lines.append(line)
         return lines
+
+    def _read_line_until(self, deadline: float) -> str | None:
+        while time.monotonic() < deadline:
+            newline_index = self._rx_buffer.find(b"\n")
+            if newline_index >= 0:
+                raw_line = self._rx_buffer[:newline_index]
+                del self._rx_buffer[: newline_index + 1]
+                return raw_line.decode("utf-8", errors="replace").strip()
+
+            available = self.serial.in_waiting
+            if available > 0:
+                self._rx_buffer.extend(self.serial.read(available))
+                continue
+
+            time.sleep(self.poll_interval)
+
+        return None
 
     def command(
         self,
@@ -127,18 +174,22 @@ class SerialProtocolSession:
             predicate = lambda _: True
 
         self.serial.reset_input_buffer()
+        self._rx_buffer.clear()
         payload = f"{text}{terminator}".encode("utf-8")
-        self.serial.write(payload)
-        self.serial.flush()
+        try:
+            self.serial.write(payload)
+        except serial.SerialTimeoutException as exc:
+            raise AssertionError(
+                f"Timed out while writing command {text!r} to serial port"
+            ) from exc
 
         deadline = time.monotonic() + self.command_timeout
         observed: list[str] = []
         while time.monotonic() < deadline:
-            raw = self.serial.readline()
-            if not raw:
-                continue
+            line = self._read_line_until(deadline)
+            if line is None:
+                break
 
-            line = raw.decode("utf-8", errors="replace").strip()
             if not line or _is_noise_line(line):
                 continue
 
@@ -148,6 +199,41 @@ class SerialProtocolSession:
 
         raise AssertionError(
             f"No matching response for command {text!r}. Observed lines: {observed!r}"
+        )
+
+    def expect_command(self, text: str, expected: str, message: str) -> None:
+        _announce(message)
+        response = self.command(text)
+        assert response == expected
+
+    def set_servo_position(self, name: str, command: str, expected: str) -> None:
+        position = _last_command_value(command)
+        self.expect_command(
+            command,
+            expected,
+            f"Setting {name} servo position to {position}",
+        )
+
+    def set_motion_speed(
+        self,
+        name: str,
+        command: str,
+        expected: str,
+        *,
+        duration_seconds: float | None = None,
+    ) -> None:
+        speed = _last_command_value(command)
+        if speed == 0:
+            direction = "stop"
+        elif speed > 0:
+            direction = "positive direction"
+        else:
+            direction = "negative direction"
+        duration = "" if duration_seconds is None else f" for {duration_seconds:g} s"
+        self.expect_command(
+            command,
+            expected,
+            f"Setting {name} speed to {speed} ({direction}){duration}",
         )
 
 
@@ -185,16 +271,24 @@ def serial_session(
 
 @pytest.fixture
 def wrist_horizontal_servo(serial_session: SerialProtocolSession):
-    _restore_command(serial_session, *SERVO_DEFAULTS["wrist_horizontal"])
+    _restore_command(
+        serial_session, *SERVO_DEFAULTS["wrist_horizontal"], phase="Starting"
+    )
     yield serial_session
-    _restore_command(serial_session, *SERVO_DEFAULTS["wrist_horizontal"])
+    _restore_command(
+        serial_session, *SERVO_DEFAULTS["wrist_horizontal"], phase="Ending"
+    )
 
 
 @pytest.fixture
 def wrist_vertical_servo(serial_session: SerialProtocolSession):
-    _restore_command(serial_session, *SERVO_DEFAULTS["wrist_vertical"])
+    _restore_command(
+        serial_session, *SERVO_DEFAULTS["wrist_vertical"], phase="Starting"
+    )
     yield serial_session
-    _restore_command(serial_session, *SERVO_DEFAULTS["wrist_vertical"])
+    _restore_command(
+        serial_session, *SERVO_DEFAULTS["wrist_vertical"], phase="Ending"
+    )
 
 
 @pytest.fixture

@@ -54,6 +54,7 @@ main() {
 
     exec python3 -m pytest \
         --rootdir="${ROOT_DIR}" \
+        --capture=tee-sys \
         -o cache_dir="${ROOT_DIR}/.pytest_cache" \
         tests/firmware \
         "$@"
