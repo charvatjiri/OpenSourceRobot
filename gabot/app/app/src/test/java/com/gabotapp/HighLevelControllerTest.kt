@@ -7,6 +7,50 @@ import org.junit.Test
 
 class HighLevelControllerTest {
     @Test
+    fun statusReturnsCurrentStateWithoutSerialCommand() {
+        val fixture = Fixture()
+        fixture.state = fixture.state.copy(
+            serialConnected = false,
+            bluetoothClientConnected = true,
+            cameraAvailable = false,
+            visionResult = vision(visible = true, centerX = 0.25f),
+            lastSerialResponse = "OK get version",
+            lastError = "camera unavailable"
+        )
+
+        fixture.controller.handle(HighLevelCommand.Status)
+
+        assertTrue(fixture.sent.isEmpty())
+        assertTrue(fixture.failStop.isEmpty())
+        assertFalse(fixture.controller.isActive)
+        assertEquals(
+            "INFO status serial=disconnected bluetooth=connected camera=unavailable " +
+                "active=none plan=none step=0 searchAttempts=0 " +
+                "lastSerialResponse=OK_get_version lastError=camera_unavailable visionVisible=true " +
+                "visionCenterX=0.250 visionCenterY=0.500 visionConfidence=0.900 visionFrame=640x480",
+            fixture.responses.single()
+        )
+    }
+
+    @Test
+    fun statusDoesNotInterruptActiveCommand() {
+        val fixture = Fixture()
+        fixture.controller.handle(HighLevelCommand.Look(HighLevelCommand.Direction.LEFT))
+
+        fixture.controller.handle(HighLevelCommand.Status)
+
+        assertTrue(fixture.controller.isActive)
+        assertEquals("shoulder horizontal -40", fixture.sent.single())
+        assertEquals(
+            "INFO status serial=connected bluetooth=connected camera=available " +
+                "active=look left plan=look left step=1 searchAttempts=0 " +
+                "lastSerialResponse=none lastError=none visionVisible=true " +
+                "visionCenterX=0.500 visionCenterY=0.500 visionConfidence=0.900 visionFrame=640x480",
+            fixture.responses.single()
+        )
+    }
+
+    @Test
     fun stopExecutesCompleteSafeStopSequence() {
         val fixture = Fixture()
 

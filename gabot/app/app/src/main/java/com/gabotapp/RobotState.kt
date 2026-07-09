@@ -7,5 +7,7 @@ data class RobotState(
     val visionResult: VisionModule.Result,
     val activePlan: String? = null,
     val currentStep: Int = 0,
-    val searchAttempts: Int = 0
+    val searchAttempts: Int = 0,
+    val lastSerialResponse: String? = null,
+    val lastError: String? = null
 )

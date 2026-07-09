@@ -7,6 +7,7 @@ class CommandPlanner {
         }
 
         return when (command) {
+            HighLevelCommand.Status -> PlanningResult.Complete("status")
             HighLevelCommand.Stop -> PlanningResult.Execute(
                 CommandPlan(
                     label = "stop",

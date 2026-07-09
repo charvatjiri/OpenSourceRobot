@@ -14,6 +14,9 @@ class HighLevelCommandParser {
         if (payload.equals("stop", ignoreCase = true)) {
             return ParseResult.Success(HighLevelCommand.Stop)
         }
+        if (payload.equals("status", ignoreCase = true)) {
+            return ParseResult.Success(HighLevelCommand.Status)
+        }
 
         return try {
             val json = JSONObject(payload)
@@ -33,6 +36,7 @@ class HighLevelCommandParser {
                     }
                 }
                 "stop" -> ParseResult.Success(HighLevelCommand.Stop)
+                "status" -> ParseResult.Success(HighLevelCommand.Status)
                 "" -> ParseResult.Error("missing high-level action")
                 else -> ParseResult.Error("unknown high-level action: $action")
             }

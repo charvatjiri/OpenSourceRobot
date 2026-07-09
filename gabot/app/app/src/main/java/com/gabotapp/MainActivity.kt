@@ -84,6 +84,8 @@ class MainActivity : ComponentActivity(), SerialInterface.SerialListener, Blueto
     private var cameraPermissionGranted by mutableStateOf(false)
     private var visionResult by mutableStateOf(VisionModule.Result.EMPTY)
     private var visionAnalysisStarted = false
+    private var lastSerialResponse: String? = null
+    private var lastError: String? = null
     private val logMessages = mutableStateListOf<String>()
     private val serialReceiveBuffer = StringBuilder()
     private var pendingBluetoothResponse: ExpectedBluetoothResponse? = null
@@ -214,10 +216,17 @@ class MainActivity : ComponentActivity(), SerialInterface.SerialListener, Blueto
                     bluetoothClientConnected = ::bluetoothServerManager.isInitialized &&
                         bluetoothServerManager.hasClientConnection(),
                     cameraAvailable = cameraPermissionGranted && isVisionResultFresh(),
-                    visionResult = visionResult
+                    visionResult = visionResult,
+                    lastSerialResponse = lastSerialResponse,
+                    lastError = lastError
                 )
             },
-            sendResponse = { response -> bluetoothServerManager.sendLine(response) },
+            sendResponse = { response ->
+                if (response.startsWith("ERR", ignoreCase = true)) {
+                    lastError = response
+                }
+                bluetoothServerManager.sendLine(response)
+            },
             onLog = ::addLog
         )
     }
@@ -369,6 +378,7 @@ class MainActivity : ComponentActivity(), SerialInterface.SerialListener, Blueto
         isConnecting = false
         serialConnected = serialManager?.isConnected == true
         statusText = if (serialConnected) "Connected" else "Disconnected"
+        lastError = message
         addLog("Error: $message")
         if (!message.startsWith("Bluetooth ")) {
             bluetoothServerManager.sendLine("ERR: $message")
@@ -433,6 +443,7 @@ class MainActivity : ComponentActivity(), SerialInterface.SerialListener, Blueto
         when (val result = highLevelCommandParser.parse(command)) {
             is HighLevelCommandParser.ParseResult.Success -> highLevelController.handle(result.command)
             is HighLevelCommandParser.ParseResult.Error -> {
+                lastError = result.message
                 addLog("BT high-level parse error: ${result.message}")
                 bluetoothServerManager.sendLine("ERR: ${result.message}")
             }
@@ -482,6 +493,10 @@ class MainActivity : ComponentActivity(), SerialInterface.SerialListener, Blueto
     }
 
     private fun handleSerialLine(line: String) {
+        lastSerialResponse = line
+        if (line.startsWith("ERR", ignoreCase = true)) {
+            lastError = line
+        }
         if (serialCommandExecutor.onSerialLine(line)) {
             addLog("Serial executor consumed: $line")
             return

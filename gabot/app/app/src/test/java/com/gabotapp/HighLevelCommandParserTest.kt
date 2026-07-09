@@ -23,6 +23,8 @@ class HighLevelCommandParserTest {
         )
         assertEquals(HighLevelCommand.Stop, success("hl:{\"action\":\"stop\"}"))
         assertEquals(HighLevelCommand.Stop, success("hl:stop"))
+        assertEquals(HighLevelCommand.Status, success("hl:{\"action\":\"status\"}"))
+        assertEquals(HighLevelCommand.Status, success("hl:status"))
         assertEquals(
             HighLevelCommand.GoTo("visible_object", null),
             success("hl:{\"action\":\"goto\",\"target\":\"visible_object\"}")

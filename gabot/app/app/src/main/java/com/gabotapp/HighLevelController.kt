@@ -17,6 +17,10 @@ class HighLevelController(
         get() = activeCommand != null
 
     fun handle(command: HighLevelCommand) {
+        if (command == HighLevelCommand.Status) {
+            sendResponse(formatStatus(currentState()))
+            return
+        }
         if (command == HighLevelCommand.Stop) {
             serialExecutor.cancel("high-level stop requested")
             resetActiveState()
@@ -136,10 +140,42 @@ class HighLevelController(
     }
 
     private fun label(command: HighLevelCommand): String = when (command) {
+        HighLevelCommand.Status -> "status"
         HighLevelCommand.Stop -> "stop"
         is HighLevelCommand.Look -> "look ${command.direction.name.lowercase()}"
         is HighLevelCommand.GoTo -> "goto ${command.objectName ?: command.target}"
         is HighLevelCommand.Collect -> "collect ${command.objectName}"
+    }
+
+    private fun formatStatus(state: RobotState): String {
+        val vision = state.visionResult
+        return listOf(
+            "INFO status",
+            "serial=${if (state.serialConnected) "connected" else "disconnected"}",
+            "bluetooth=${if (state.bluetoothClientConnected) "connected" else "disconnected"}",
+            "camera=${if (state.cameraAvailable) "available" else "unavailable"}",
+            "active=${activeCommand?.let(::label) ?: "none"}",
+            "plan=${state.activePlan ?: "none"}",
+            "step=${state.currentStep}",
+            "searchAttempts=${state.searchAttempts}",
+            "lastSerialResponse=${formatToken(state.lastSerialResponse)}",
+            "lastError=${formatToken(state.lastError)}",
+            "visionVisible=${vision.objectVisible}",
+            "visionCenterX=${formatFloat(vision.centerX)}",
+            "visionCenterY=${formatFloat(vision.centerY)}",
+            "visionConfidence=${formatFloat(vision.confidence)}",
+            "visionFrame=${vision.frameWidth}x${vision.frameHeight}"
+        ).joinToString(" ")
+    }
+
+    private fun formatFloat(value: Float): String = String.format(java.util.Locale.US, "%.3f", value)
+
+    private fun formatToken(value: String?): String {
+        return value
+            ?.trim()
+            ?.ifEmpty { null }
+            ?.replace(Regex("\\s+"), "_")
+            ?: "none"
     }
 
     companion object {
