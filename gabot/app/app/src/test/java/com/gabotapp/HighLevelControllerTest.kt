@@ -25,7 +25,7 @@ class HighLevelControllerTest {
         assertFalse(fixture.controller.isActive)
         assertEquals(
             "INFO status serial=disconnected bluetooth=connected camera=unavailable " +
-                "active=none plan=none step=0 searchAttempts=0 " +
+                "active=none state=IDLE plan=none step=0 searchAttempts=0 " +
                 "lastSerialResponse=OK_get_version lastError=camera_unavailable visionVisible=true " +
                 "visionCenterX=0.250 visionCenterY=0.500 visionConfidence=0.900 visionFrame=640x480",
             fixture.responses.single()
@@ -43,11 +43,26 @@ class HighLevelControllerTest {
         assertEquals("shoulder horizontal -40", fixture.sent.single())
         assertEquals(
             "INFO status serial=connected bluetooth=connected camera=available " +
-                "active=look_left plan=look_left step=1 searchAttempts=0 " +
+                "active=look_left state=RUNNING plan=look_left step=1 searchAttempts=0 " +
                 "lastSerialResponse=none lastError=none visionVisible=true " +
                 "visionCenterX=0.500 visionCenterY=0.500 visionConfidence=0.900 visionFrame=640x480",
             fixture.responses.last()
         )
+    }
+
+    @Test
+    fun exposesExplicitStateTransitions() {
+        val fixture = Fixture()
+        assertEquals(HighLevelController.State.IDLE, fixture.controller.state)
+
+        fixture.controller.handle(HighLevelCommand.Look(HighLevelCommand.Direction.LEFT))
+        assertEquals(HighLevelController.State.RUNNING, fixture.controller.state)
+
+        fixture.controller.handle(HighLevelCommand.Stop)
+        assertEquals(HighLevelController.State.STOPPING, fixture.controller.state)
+
+        fixture.acknowledgeCommands(SerialCommandExecutor.STOP_COMMANDS.size)
+        assertEquals(HighLevelController.State.COMPLETED, fixture.controller.state)
     }
 
     @Test
@@ -58,8 +73,32 @@ class HighLevelControllerTest {
         fixture.acknowledgeCommands(SerialCommandExecutor.STOP_COMMANDS.size)
 
         assertEquals(SerialCommandExecutor.STOP_COMMANDS, fixture.sent)
+        assertEquals("INFO hl started stop", fixture.responses.first())
+        assertTrue(fixture.responses.contains("INFO hl step 1/6 shoulder_horizontal_0"))
         assertEquals("OK hl stop", fixture.responses.last())
         assertFalse(fixture.controller.isActive)
+        assertEquals(HighLevelController.State.COMPLETED, fixture.controller.state)
+    }
+
+    @Test
+    fun emitsFormalLifecycleResponsesForSuccessfulCommand() {
+        val fixture = Fixture()
+
+        fixture.controller.handle(HighLevelCommand.Look(HighLevelCommand.Direction.RIGHT))
+        fixture.executor.onSerialLine("OK right")
+        fixture.scheduler.advanceBy(400L)
+        fixture.executor.onSerialLine("OK stop")
+
+        assertEquals(
+            listOf(
+                "INFO hl started look_right",
+                "INFO hl step 1/2 shoulder_horizontal_40",
+                "INFO hl step 2/2 shoulder_horizontal_0",
+                "OK hl look_right"
+            ),
+            fixture.responses
+        )
+        assertEquals(HighLevelController.State.COMPLETED, fixture.controller.state)
     }
 
     @Test
@@ -72,6 +111,35 @@ class HighLevelControllerTest {
         assertEquals(SerialCommandExecutor.FAIL_STOP_COMMANDS, fixture.failStop)
         assertEquals("ERR hl motor_blocked", fixture.responses.last())
         assertFalse(fixture.controller.isActive)
+        assertEquals(HighLevelController.State.FAILED, fixture.controller.state)
+    }
+
+    @Test
+    fun terminalStateAllowsNextCommand() {
+        val fixture = Fixture()
+        fixture.controller.handle(HighLevelCommand.Look(HighLevelCommand.Direction.LEFT))
+        fixture.executor.onSerialLine("OK left")
+        fixture.scheduler.advanceBy(400L)
+        fixture.executor.onSerialLine("OK stop")
+
+        assertEquals(HighLevelController.State.COMPLETED, fixture.controller.state)
+
+        fixture.controller.handle(HighLevelCommand.Look(HighLevelCommand.Direction.RIGHT))
+
+        assertEquals(HighLevelController.State.RUNNING, fixture.controller.state)
+        assertEquals("shoulder horizontal 40", fixture.sent.last())
+    }
+
+    @Test
+    fun cancelMovesActiveCommandToFailedState() {
+        val fixture = Fixture()
+        fixture.controller.handle(HighLevelCommand.Look(HighLevelCommand.Direction.LEFT))
+
+        fixture.controller.cancel("bluetooth client disconnected", failStop = true)
+
+        assertFalse(fixture.controller.isActive)
+        assertEquals(HighLevelController.State.FAILED, fixture.controller.state)
+        assertEquals(SerialCommandExecutor.FAIL_STOP_COMMANDS, fixture.failStop)
     }
 
     @Test

@@ -13,9 +13,11 @@ class HighLevelController(
     private var currentStep = 0
     private var searchAttempts = 0
     private var planIterations = 0
+    var state: State = State.IDLE
+        private set
 
     val isActive: Boolean
-        get() = activeCommand != null
+        get() = state == State.RUNNING || state == State.REPLANNING || state == State.STOPPING
 
     fun handle(command: HighLevelCommand) {
         if (command == HighLevelCommand.Status) {
@@ -23,17 +25,22 @@ class HighLevelController(
             return
         }
         if (command == HighLevelCommand.Stop) {
+            state = State.STOPPING
             serialExecutor.cancel("high-level stop requested")
-            resetActiveState()
+            clearActiveState(finalState = State.STOPPING)
+            state = State.STOPPING
             activeCommand = command
+            sendResponse(responseFormatter.started(label(command)))
             executeNextPlan()
             return
         }
-        if (activeCommand != null) {
+        if (isActive) {
             sendResponse(responseFormatter.error("high-level controller busy"))
             return
         }
 
+        clearActiveState(finalState = State.IDLE)
+        state = State.RUNNING
         activeCommand = command
         onLog("High-level command started: ${label(command)}")
         sendResponse(responseFormatter.started(label(command)))
@@ -41,26 +48,31 @@ class HighLevelController(
     }
 
     fun cancel(reason: String, failStop: Boolean) {
-        if (activeCommand == null) {
+        if (!isActive) {
             return
         }
         onLog("High-level command canceled: $reason")
         if (failStop) {
+            state = State.STOPPING
             serialExecutor.cancelAndFailStop(reason)
         } else {
             serialExecutor.cancel(reason)
         }
-        resetActiveState()
+        clearActiveState(finalState = State.FAILED)
     }
 
     fun currentState(): RobotState = stateProvider().copy(
         activePlan = activePlan?.label,
         currentStep = currentStep,
-        searchAttempts = searchAttempts
+        searchAttempts = searchAttempts,
+        highLevelState = state.name
     )
 
     private fun executeNextPlan() {
         val command = activeCommand ?: return
+        if (state != State.STOPPING) {
+            state = if (planIterations == 0) State.RUNNING else State.REPLANNING
+        }
         planIterations++
         if (planIterations > MAX_PLAN_ITERATIONS) {
             fail("planning iteration limit reached", failStopAlreadySent = false)
@@ -85,6 +97,9 @@ class HighLevelController(
         if (plan.replanAfterCompletion) {
             sendResponse(responseFormatter.replan(plan.label, searchAttempts))
         }
+        if (state != State.STOPPING) {
+            state = State.RUNNING
+        }
         val accepted = serialExecutor.executePlan(
             plan = plan,
             onProgress = { step, total, command ->
@@ -108,6 +123,7 @@ class HighLevelController(
                 activePlan = null
                 currentStep = 0
                 if (plan.replanAfterCompletion) {
+                    state = State.REPLANNING
                     executeNextPlan()
                 } else {
                     complete(label(activeCommand ?: return))
@@ -124,25 +140,29 @@ class HighLevelController(
 
     private fun complete(message: String) {
         onLog("High-level command complete: $message")
+        state = State.COMPLETED
         sendResponse(responseFormatter.success(message))
-        resetActiveState()
+        clearActiveState(finalState = State.COMPLETED)
     }
 
     private fun fail(message: String, failStopAlreadySent: Boolean) {
         onLog("High-level command failed: $message")
         if (!failStopAlreadySent) {
+            state = State.STOPPING
             serialExecutor.cancelAndFailStop(message)
         }
+        state = State.FAILED
         sendResponse(responseFormatter.error(message))
-        resetActiveState()
+        clearActiveState(finalState = State.FAILED)
     }
 
-    private fun resetActiveState() {
+    private fun clearActiveState(finalState: State) {
         activeCommand = null
         activePlan = null
         currentStep = 0
         searchAttempts = 0
         planIterations = 0
+        state = finalState
     }
 
     private fun label(command: HighLevelCommand): String = when (command) {
@@ -155,5 +175,14 @@ class HighLevelController(
 
     companion object {
         private const val MAX_PLAN_ITERATIONS = 20
+    }
+
+    enum class State {
+        IDLE,
+        RUNNING,
+        REPLANNING,
+        STOPPING,
+        FAILED,
+        COMPLETED
     }
 }
