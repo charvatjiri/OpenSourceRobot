@@ -90,6 +90,7 @@ class MainActivity : ComponentActivity(), SerialInterface.SerialListener, Blueto
     private val serialReceiveBuffer = StringBuilder()
     private var pendingBluetoothResponse: ExpectedBluetoothResponse? = null
     private val highLevelCommandParser = HighLevelCommandParser()
+    private val highLevelResponseFormatter = HighLevelResponseFormatter()
     private lateinit var serialCommandExecutor: SerialCommandExecutor
     private lateinit var highLevelController: HighLevelController
     private lateinit var visionModule: VisionModule
@@ -221,6 +222,7 @@ class MainActivity : ComponentActivity(), SerialInterface.SerialListener, Blueto
                     lastError = lastError
                 )
             },
+            responseFormatter = highLevelResponseFormatter,
             sendResponse = { response ->
                 if (response.startsWith("ERR", ignoreCase = true)) {
                     lastError = response
@@ -445,7 +447,7 @@ class MainActivity : ComponentActivity(), SerialInterface.SerialListener, Blueto
             is HighLevelCommandParser.ParseResult.Error -> {
                 lastError = result.message
                 addLog("BT high-level parse error: ${result.message}")
-                bluetoothServerManager.sendLine("ERR: ${result.message}")
+                bluetoothServerManager.sendLine(highLevelResponseFormatter.error(result.message))
             }
         }
     }

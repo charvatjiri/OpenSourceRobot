@@ -4,6 +4,7 @@ class HighLevelController(
     private val planner: CommandPlanner,
     private val serialExecutor: SerialCommandExecutor,
     private val stateProvider: () -> RobotState,
+    private val responseFormatter: HighLevelResponseFormatter = HighLevelResponseFormatter(),
     private val sendResponse: (String) -> Unit,
     private val onLog: (String) -> Unit
 ) {
@@ -18,7 +19,7 @@ class HighLevelController(
 
     fun handle(command: HighLevelCommand) {
         if (command == HighLevelCommand.Status) {
-            sendResponse(formatStatus(currentState()))
+            sendResponse(responseFormatter.status(currentState(), activeCommand?.let(::label)))
             return
         }
         if (command == HighLevelCommand.Stop) {
@@ -29,12 +30,13 @@ class HighLevelController(
             return
         }
         if (activeCommand != null) {
-            sendResponse("ERR: high-level controller busy")
+            sendResponse(responseFormatter.error("high-level controller busy"))
             return
         }
 
         activeCommand = command
         onLog("High-level command started: ${label(command)}")
+        sendResponse(responseFormatter.started(label(command)))
         executeNextPlan()
     }
 
@@ -80,11 +82,15 @@ class HighLevelController(
             searchAttempts++
         }
         onLog("High-level plan: ${plan.label}")
+        if (plan.replanAfterCompletion) {
+            sendResponse(responseFormatter.replan(plan.label, searchAttempts))
+        }
         val accepted = serialExecutor.executePlan(
             plan = plan,
             onProgress = { step, total, command ->
                 currentStep = step
                 onLog("High-level step $step/$total: ${command.command}")
+                sendResponse(responseFormatter.progress(step, total, command.command))
             },
             onPlanComplete = { result -> handleExecutionResult(plan, result) }
         )
@@ -118,7 +124,7 @@ class HighLevelController(
 
     private fun complete(message: String) {
         onLog("High-level command complete: $message")
-        sendResponse("OK hl $message")
+        sendResponse(responseFormatter.success(message))
         resetActiveState()
     }
 
@@ -127,7 +133,7 @@ class HighLevelController(
         if (!failStopAlreadySent) {
             serialExecutor.cancelAndFailStop(message)
         }
-        sendResponse(if (message.startsWith("ERR", ignoreCase = true)) message else "ERR: $message")
+        sendResponse(responseFormatter.error(message))
         resetActiveState()
     }
 
@@ -145,37 +151,6 @@ class HighLevelController(
         is HighLevelCommand.Look -> "look ${command.direction.name.lowercase()}"
         is HighLevelCommand.GoTo -> "goto ${command.objectName ?: command.target}"
         is HighLevelCommand.Collect -> "collect ${command.objectName}"
-    }
-
-    private fun formatStatus(state: RobotState): String {
-        val vision = state.visionResult
-        return listOf(
-            "INFO status",
-            "serial=${if (state.serialConnected) "connected" else "disconnected"}",
-            "bluetooth=${if (state.bluetoothClientConnected) "connected" else "disconnected"}",
-            "camera=${if (state.cameraAvailable) "available" else "unavailable"}",
-            "active=${activeCommand?.let(::label) ?: "none"}",
-            "plan=${state.activePlan ?: "none"}",
-            "step=${state.currentStep}",
-            "searchAttempts=${state.searchAttempts}",
-            "lastSerialResponse=${formatToken(state.lastSerialResponse)}",
-            "lastError=${formatToken(state.lastError)}",
-            "visionVisible=${vision.objectVisible}",
-            "visionCenterX=${formatFloat(vision.centerX)}",
-            "visionCenterY=${formatFloat(vision.centerY)}",
-            "visionConfidence=${formatFloat(vision.confidence)}",
-            "visionFrame=${vision.frameWidth}x${vision.frameHeight}"
-        ).joinToString(" ")
-    }
-
-    private fun formatFloat(value: Float): String = String.format(java.util.Locale.US, "%.3f", value)
-
-    private fun formatToken(value: String?): String {
-        return value
-            ?.trim()
-            ?.ifEmpty { null }
-            ?.replace(Regex("\\s+"), "_")
-            ?: "none"
     }
 
     companion object {

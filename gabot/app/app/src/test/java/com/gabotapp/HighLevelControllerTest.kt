@@ -43,10 +43,10 @@ class HighLevelControllerTest {
         assertEquals("shoulder horizontal -40", fixture.sent.single())
         assertEquals(
             "INFO status serial=connected bluetooth=connected camera=available " +
-                "active=look left plan=look left step=1 searchAttempts=0 " +
+                "active=look_left plan=look_left step=1 searchAttempts=0 " +
                 "lastSerialResponse=none lastError=none visionVisible=true " +
                 "visionCenterX=0.500 visionCenterY=0.500 visionConfidence=0.900 visionFrame=640x480",
-            fixture.responses.single()
+            fixture.responses.last()
         )
     }
 
@@ -58,7 +58,7 @@ class HighLevelControllerTest {
         fixture.acknowledgeCommands(SerialCommandExecutor.STOP_COMMANDS.size)
 
         assertEquals(SerialCommandExecutor.STOP_COMMANDS, fixture.sent)
-        assertEquals(listOf("OK hl stop"), fixture.responses)
+        assertEquals("OK hl stop", fixture.responses.last())
         assertFalse(fixture.controller.isActive)
     }
 
@@ -70,7 +70,7 @@ class HighLevelControllerTest {
         fixture.executor.onSerialLine("ERR: motor blocked")
 
         assertEquals(SerialCommandExecutor.FAIL_STOP_COMMANDS, fixture.failStop)
-        assertEquals(listOf("ERR: motor blocked"), fixture.responses)
+        assertEquals("ERR hl motor_blocked", fixture.responses.last())
         assertFalse(fixture.controller.isActive)
     }
 
@@ -82,7 +82,7 @@ class HighLevelControllerTest {
         fixture.scheduler.advanceBy(500L)
 
         assertEquals(SerialCommandExecutor.FAIL_STOP_COMMANDS, fixture.failStop)
-        assertEquals(listOf("ERR: timeout waiting for shoulder horizontal 40"), fixture.responses)
+        assertEquals("ERR hl timeout_waiting_for_shoulder_horizontal_40", fixture.responses.last())
     }
 
     @Test
@@ -92,7 +92,7 @@ class HighLevelControllerTest {
 
         fixture.controller.handle(HighLevelCommand.GoTo("visible_object", null))
 
-        assertEquals(listOf("ERR: camera unavailable"), fixture.responses)
+        assertEquals("ERR hl camera_unavailable", fixture.responses.last())
         assertEquals(SerialCommandExecutor.FAIL_STOP_COMMANDS, fixture.failStop)
         assertFalse(fixture.controller.isActive)
     }
@@ -119,7 +119,7 @@ class HighLevelControllerTest {
         assertEquals("wheels fb 0", fixture.sent.last())
         fixture.executor.onSerialLine("OK approach stop")
 
-        assertEquals(listOf("OK hl goto apple"), fixture.responses)
+        assertEquals("OK hl goto_apple", fixture.responses.last())
         assertFalse(fixture.controller.isActive)
     }
 
@@ -131,7 +131,7 @@ class HighLevelControllerTest {
         fixture.controller.handle(HighLevelCommand.Look(HighLevelCommand.Direction.RIGHT))
 
         assertTrue(fixture.controller.isActive)
-        assertEquals("ERR: high-level controller busy", fixture.responses.single())
+        assertEquals("ERR hl high-level_controller_busy", fixture.responses.last())
     }
 
     @Test
@@ -144,7 +144,7 @@ class HighLevelControllerTest {
         assertEquals(SerialCommandExecutor.STOP_COMMANDS.first(), fixture.sent.last())
         fixture.acknowledgeCommands(SerialCommandExecutor.STOP_COMMANDS.size)
 
-        assertEquals(listOf("OK hl stop"), fixture.responses)
+        assertEquals("OK hl stop", fixture.responses.last())
         assertFalse(fixture.controller.isActive)
     }
 
@@ -155,7 +155,7 @@ class HighLevelControllerTest {
 
         fixture.controller.handle(HighLevelCommand.GoTo("visible_object", null))
 
-        assertEquals(listOf("ERR: serial disconnected"), fixture.responses)
+        assertEquals("ERR hl serial_disconnected", fixture.responses.last())
         assertEquals(SerialCommandExecutor.FAIL_STOP_COMMANDS, fixture.failStop)
         assertFalse(fixture.controller.isActive)
     }
