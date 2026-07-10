@@ -12,6 +12,10 @@ class HighLevelController(
     private var activePlan: CommandPlan? = null
     private var currentStep = 0
     private var searchAttempts = 0
+    private var collectStage: CollectStage? = null
+    private var collectCenterAttempts = 0
+    private var collectApproachAttempts = 0
+    private var collectVerifyAttempts = 0
     private var planIterations = 0
     var state: State = State.IDLE
         private set
@@ -55,6 +59,9 @@ class HighLevelController(
         clearActiveState(finalState = State.IDLE)
         state = State.RUNNING
         activeCommand = command
+        if (command is HighLevelCommand.Collect) {
+            collectStage = CollectStage.SEARCH_OBJECT
+        }
         onLog("High-level command started: ${label(command)}")
         sendResponse(responseFormatter.started(label(command)))
         executeNextPlan()
@@ -122,6 +129,10 @@ class HighLevelController(
         activePlan = activePlan?.label,
         currentStep = currentStep,
         searchAttempts = searchAttempts,
+        collectStage = collectStage,
+        collectCenterAttempts = collectCenterAttempts,
+        collectApproachAttempts = collectApproachAttempts,
+        collectVerifyAttempts = collectVerifyAttempts,
         highLevelState = state.name
     )
 
@@ -153,6 +164,15 @@ class HighLevelController(
         if (plan.countsAsSearchAttempt) {
             searchAttempts++
         }
+        if (plan.countsAsCollectCenterAttempt) {
+            collectCenterAttempts++
+        }
+        if (plan.countsAsCollectApproachAttempt) {
+            collectApproachAttempts++
+        }
+        if (plan.countsAsCollectVerifyAttempt) {
+            collectVerifyAttempts++
+        }
         onLog("High-level plan: ${plan.label}")
         if (plan.replanAfterCompletion) {
             sendResponse(responseFormatter.replan(plan.label, searchAttempts))
@@ -180,6 +200,9 @@ class HighLevelController(
     ) {
         when (result) {
             SerialCommandExecutor.ExecutionResult.Success -> {
+                plan.collectStageAfterCompletion?.let { stage ->
+                    collectStage = stage
+                }
                 activePlan = null
                 currentStep = 0
                 if (plan.replanAfterCompletion) {
@@ -221,6 +244,10 @@ class HighLevelController(
         activePlan = null
         currentStep = 0
         searchAttempts = 0
+        collectStage = null
+        collectCenterAttempts = 0
+        collectApproachAttempts = 0
+        collectVerifyAttempts = 0
         planIterations = 0
         state = finalState
     }
