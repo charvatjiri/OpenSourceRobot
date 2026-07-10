@@ -840,11 +840,15 @@ private fun CameraPreviewCard(
 @Composable
 private fun VisionStatus(result: VisionModule.Result) {
     val status = if (result.objectVisible) "visible" else "not visible"
+    val objectName = result.objectName ?: "unknown"
     Text(
-        text = "Object: $status | x %.2f | y %.2f | confidence %.2f".format(
+        text = "Object: $status/$objectName | x %.2f | y %.2f | size %.2fx%.2f | confidence %.2f | identity %.2f".format(
             result.centerX,
             result.centerY,
-            result.confidence
+            result.width,
+            result.height,
+            result.confidence,
+            result.identityConfidence
         ),
         modifier = Modifier.padding(8.dp),
         style = MaterialTheme.typography.bodySmall

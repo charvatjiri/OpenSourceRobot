@@ -156,6 +156,17 @@ class CommandPlannerTest {
     }
 
     @Test
+    fun targetSpecificCollectIgnoresDifferentDetectedProfile() {
+        val result = execute(
+            HighLevelCommand.Collect("apple"),
+            state(objectName = "cube_blue", collectStage = CollectStage.SEARCH_OBJECT)
+        )
+
+        assertEquals("collect search object", result.plan.label)
+        assertTrue(result.plan.countsAsSearchAttempt)
+    }
+
+    @Test
     fun lookPlanTurnsShoulderAndStopsIt() {
         val result = execute(
             HighLevelCommand.Look(HighLevelCommand.Direction.RIGHT),
@@ -187,6 +198,7 @@ class CommandPlannerTest {
         serialConnected: Boolean = true,
         cameraAvailable: Boolean = true,
         visible: Boolean = true,
+        objectName: String? = "apple_red",
         centerX: Float = 0.5f,
         attempts: Int = 0,
         collectStage: CollectStage? = null,
@@ -199,9 +211,13 @@ class CommandPlannerTest {
         cameraAvailable = cameraAvailable,
         visionResult = VisionModule.Result(
             objectVisible = visible,
+            objectName = objectName,
             centerX = centerX,
             centerY = 0.5f,
+            width = if (visible) 0.2f else 0f,
+            height = if (visible) 0.2f else 0f,
             confidence = if (visible) 0.9f else 0f,
+            identityConfidence = if (visible) 0.8f else 0f,
             frameWidth = 640,
             frameHeight = 480,
             timestampNanos = 1L

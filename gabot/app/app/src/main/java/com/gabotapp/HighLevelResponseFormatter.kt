@@ -34,9 +34,13 @@ class HighLevelResponseFormatter {
             "lastSerialResponse=${tokenOrNone(state.lastSerialResponse)}",
             "lastError=${tokenOrNone(state.lastError)}",
             "visionVisible=${vision.objectVisible}",
+            "visionObject=${tokenOrNone(vision.objectName)}",
             "visionCenterX=${formatFloat(vision.centerX)}",
             "visionCenterY=${formatFloat(vision.centerY)}",
+            "visionWidth=${formatFloat(vision.width)}",
+            "visionHeight=${formatFloat(vision.height)}",
             "visionConfidence=${formatFloat(vision.confidence)}",
+            "visionIdentityConfidence=${formatFloat(vision.identityConfidence)}",
             "visionFrame=${vision.frameWidth}x${vision.frameHeight}"
         ).joinToString(" ")
     }

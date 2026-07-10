@@ -28,7 +28,9 @@ class HighLevelControllerTest {
                 "active=none state=IDLE plan=none step=0 searchAttempts=0 " +
                 "collectStage=none collectCenterAttempts=0 collectApproachAttempts=0 collectVerifyAttempts=0 " +
                 "lastSerialResponse=OK_get_version lastError=camera_unavailable visionVisible=true " +
-                "visionCenterX=0.250 visionCenterY=0.500 visionConfidence=0.900 visionFrame=640x480",
+                "visionObject=apple_red visionCenterX=0.250 visionCenterY=0.500 " +
+                "visionWidth=0.200 visionHeight=0.200 visionConfidence=0.900 " +
+                "visionIdentityConfidence=0.800 visionFrame=640x480",
             fixture.responses.single()
         )
     }
@@ -47,7 +49,9 @@ class HighLevelControllerTest {
                 "active=look_left state=RUNNING plan=look_left step=1 searchAttempts=0 " +
                 "collectStage=none collectCenterAttempts=0 collectApproachAttempts=0 collectVerifyAttempts=0 " +
                 "lastSerialResponse=none lastError=none visionVisible=true " +
-                "visionCenterX=0.500 visionCenterY=0.500 visionConfidence=0.900 visionFrame=640x480",
+                "visionObject=apple_red visionCenterX=0.500 visionCenterY=0.500 " +
+                "visionWidth=0.200 visionHeight=0.200 visionConfidence=0.900 " +
+                "visionIdentityConfidence=0.800 visionFrame=640x480",
             fixture.responses.last()
         )
     }
@@ -352,9 +356,13 @@ class HighLevelControllerTest {
     companion object {
         private fun vision(visible: Boolean = true, centerX: Float = 0.5f) = VisionModule.Result(
             objectVisible = visible,
+            objectName = if (visible) "apple_red" else null,
             centerX = centerX,
             centerY = 0.5f,
+            width = if (visible) 0.2f else 0f,
+            height = if (visible) 0.2f else 0f,
             confidence = if (visible) 0.9f else 0f,
+            identityConfidence = if (visible) 0.8f else 0f,
             frameWidth = 640,
             frameHeight = 480,
             timestampNanos = 1L

@@ -58,7 +58,7 @@ class CommandPlanner {
         }
 
         val vision = state.visionResult
-        if (!vision.objectVisible || vision.confidence < MIN_CONFIDENCE) {
+        if (!hasUsableVision(state, targetName(command))) {
             if (state.searchAttempts >= MAX_SEARCH_ATTEMPTS) {
                 return PlanningResult.Error("object not found after $MAX_SEARCH_ATTEMPTS attempts")
             }
@@ -111,17 +111,17 @@ class CommandPlanner {
         }
 
         return when (state.collectStage ?: CollectStage.SEARCH_OBJECT) {
-            CollectStage.SEARCH_OBJECT -> planCollectSearch(state)
-            CollectStage.CENTER_OBJECT -> planCollectCenter(state)
-            CollectStage.APPROACH_OBJECT -> planCollectApproach(state)
-            CollectStage.VERIFY_OBJECT -> planCollectVerify(state)
+            CollectStage.SEARCH_OBJECT -> planCollectSearch(command.objectName, state)
+            CollectStage.CENTER_OBJECT -> planCollectCenter(command.objectName, state)
+            CollectStage.APPROACH_OBJECT -> planCollectApproach(command.objectName, state)
+            CollectStage.VERIFY_OBJECT -> planCollectVerify(command.objectName, state)
             CollectStage.GRAB_OBJECT -> planCollectGrab(command)
             CollectStage.DONE -> PlanningResult.Complete("collect ${command.objectName}")
         }
     }
 
-    private fun planCollectSearch(state: RobotState): PlanningResult {
-        if (hasUsableVision(state)) {
+    private fun planCollectSearch(targetName: String, state: RobotState): PlanningResult {
+        if (hasUsableVision(state, targetName)) {
             return transitionCollectStage(
                 label = "collect search object found",
                 nextStage = CollectStage.CENTER_OBJECT
@@ -145,8 +145,8 @@ class CommandPlanner {
         )
     }
 
-    private fun planCollectCenter(state: RobotState): PlanningResult {
-        if (!hasUsableVision(state)) {
+    private fun planCollectCenter(targetName: String, state: RobotState): PlanningResult {
+        if (!hasUsableVision(state, targetName)) {
             return transitionCollectStage(
                 label = "collect lost object",
                 nextStage = CollectStage.SEARCH_OBJECT
@@ -170,8 +170,8 @@ class CommandPlanner {
         }
     }
 
-    private fun planCollectApproach(state: RobotState): PlanningResult {
-        if (!hasUsableVision(state)) {
+    private fun planCollectApproach(targetName: String, state: RobotState): PlanningResult {
+        if (!hasUsableVision(state, targetName)) {
             return transitionCollectStage(
                 label = "collect lost object before approach",
                 nextStage = CollectStage.SEARCH_OBJECT
@@ -202,13 +202,13 @@ class CommandPlanner {
         )
     }
 
-    private fun planCollectVerify(state: RobotState): PlanningResult {
+    private fun planCollectVerify(targetName: String, state: RobotState): PlanningResult {
         if (state.collectVerifyAttempts >= MAX_COLLECT_VERIFY_ATTEMPTS) {
             return PlanningResult.Error(
                 "collect verify iteration limit reached after $MAX_COLLECT_VERIFY_ATTEMPTS attempts"
             )
         }
-        if (!hasUsableVision(state)) {
+        if (!hasUsableVision(state, targetName)) {
             return transitionCollectStage(
                 label = "collect verify lost object",
                 nextStage = CollectStage.SEARCH_OBJECT,
@@ -282,11 +282,36 @@ class CommandPlanner {
         )
     )
 
-    private fun hasUsableVision(state: RobotState): Boolean =
-        state.visionResult.objectVisible && state.visionResult.confidence >= MIN_CONFIDENCE
+    private fun hasUsableVision(state: RobotState, targetName: String?): Boolean =
+        state.visionResult.objectVisible &&
+            state.visionResult.confidence >= MIN_CONFIDENCE &&
+            targetMatchesVision(targetName, state.visionResult.objectName)
 
     private fun isCentered(vision: VisionModule.Result): Boolean =
         vision.centerX >= CENTER_LEFT && vision.centerX <= CENTER_RIGHT
+
+    private fun targetName(command: HighLevelCommand): String? = when (command) {
+        is HighLevelCommand.Collect -> command.objectName
+        is HighLevelCommand.GoTo -> command.objectName ?: command.target
+        else -> null
+    }
+
+    private fun targetMatchesVision(targetName: String?, detectedName: String?): Boolean {
+        if (targetName.isNullOrBlank() || detectedName.isNullOrBlank()) {
+            return true
+        }
+        val expectedProfile = targetToProfile(targetName) ?: return true
+        return detectedName.equals(expectedProfile, ignoreCase = true)
+    }
+
+    private fun targetToProfile(targetName: String): String? =
+        when (targetName.trim().lowercase()) {
+            "object", "visible_object", "target", "any" -> null
+            "apple", "red", "apple_red" -> "apple_red"
+            "cube", "blue", "cube_blue" -> "cube_blue"
+            "marker", "green", "marker_green" -> "marker_green"
+            else -> targetName.trim().lowercase()
+        }
 
     companion object {
         const val MIN_CONFIDENCE = 0.25f
