@@ -217,6 +217,60 @@ class HighLevelControllerTest {
     }
 
     @Test
+    fun cancelInterruptsActivePlanAndClearsController() {
+        val fixture = Fixture()
+        fixture.controller.handle(HighLevelCommand.Look(HighLevelCommand.Direction.LEFT))
+
+        fixture.controller.handle(HighLevelCommand.Cancel)
+
+        assertFalse(fixture.controller.isActive)
+        assertEquals(HighLevelController.State.IDLE, fixture.controller.state)
+        assertEquals(SerialCommandExecutor.FAIL_STOP_COMMANDS, fixture.failStop)
+        assertEquals("OK hl cancel", fixture.responses.last())
+    }
+
+    @Test
+    fun pauseStopsMotionAndResumeReplansPausedCommand() {
+        val fixture = Fixture()
+        fixture.controller.handle(HighLevelCommand.Look(HighLevelCommand.Direction.RIGHT))
+
+        fixture.controller.handle(HighLevelCommand.Pause)
+
+        assertTrue(fixture.controller.isActive)
+        assertEquals(HighLevelController.State.PAUSED, fixture.controller.state)
+        assertEquals(SerialCommandExecutor.FAIL_STOP_COMMANDS, fixture.failStop)
+        assertEquals("OK hl pause", fixture.responses.last())
+
+        fixture.controller.handle(HighLevelCommand.Resume)
+
+        assertEquals(HighLevelController.State.RUNNING, fixture.controller.state)
+        assertEquals("INFO hl started resume_look_right", fixture.responses[fixture.responses.lastIndex - 1])
+        assertEquals("shoulder horizontal 40", fixture.sent.last())
+    }
+
+    @Test
+    fun resumeWithoutPausedCommandReturnsError() {
+        val fixture = Fixture()
+
+        fixture.controller.handle(HighLevelCommand.Resume)
+
+        assertEquals("ERR hl no_paused_high-level_command_to_resume", fixture.responses.last())
+        assertFalse(fixture.controller.isActive)
+    }
+
+    @Test
+    fun lookCenterUsesOperationalCenterCommand() {
+        val fixture = Fixture()
+
+        fixture.controller.handle(HighLevelCommand.Look(HighLevelCommand.Direction.CENTER))
+        fixture.executor.onSerialLine("OK center")
+
+        assertEquals(listOf("shoulder horizontal 0"), fixture.sent)
+        assertEquals("OK hl look_center", fixture.responses.last())
+        assertFalse(fixture.controller.isActive)
+    }
+
+    @Test
     fun disconnectedSerialRejectsCommand() {
         val fixture = Fixture()
         fixture.state = fixture.state.copy(serialConnected = false)

@@ -17,11 +17,24 @@ class HighLevelController(
         private set
 
     val isActive: Boolean
-        get() = state == State.RUNNING || state == State.REPLANNING || state == State.STOPPING
+        get() = state == State.RUNNING || state == State.REPLANNING ||
+            state == State.STOPPING || state == State.PAUSED
 
     fun handle(command: HighLevelCommand) {
         if (command == HighLevelCommand.Status) {
             sendResponse(responseFormatter.status(currentState(), activeCommand?.let(::label)))
+            return
+        }
+        if (command == HighLevelCommand.Cancel) {
+            handleCancel()
+            return
+        }
+        if (command == HighLevelCommand.Pause) {
+            handlePause()
+            return
+        }
+        if (command == HighLevelCommand.Resume) {
+            handleResume()
             return
         }
         if (command == HighLevelCommand.Stop) {
@@ -44,6 +57,50 @@ class HighLevelController(
         activeCommand = command
         onLog("High-level command started: ${label(command)}")
         sendResponse(responseFormatter.started(label(command)))
+        executeNextPlan()
+    }
+
+    private fun handleCancel() {
+        if (!isActive) {
+            clearActiveState(finalState = State.IDLE)
+            sendResponse(responseFormatter.success("cancel"))
+            return
+        }
+        onLog("High-level command canceled by client")
+        state = State.STOPPING
+        serialExecutor.cancelAndFailStop("high-level cancel requested")
+        clearActiveState(finalState = State.IDLE)
+        sendResponse(responseFormatter.success("cancel"))
+    }
+
+    private fun handlePause() {
+        if (!isActive || state == State.STOPPING) {
+            sendResponse(responseFormatter.error("no active high-level command to pause"))
+            return
+        }
+        if (state == State.PAUSED) {
+            sendResponse(responseFormatter.success("pause"))
+            return
+        }
+        onLog("High-level command paused")
+        serialExecutor.cancelAndFailStop("high-level pause requested")
+        activePlan = null
+        currentStep = 0
+        planIterations = 0
+        state = State.PAUSED
+        sendResponse(responseFormatter.success("pause"))
+    }
+
+    private fun handleResume() {
+        val command = activeCommand
+        if (state != State.PAUSED || command == null) {
+            sendResponse(responseFormatter.error("no paused high-level command to resume"))
+            return
+        }
+        onLog("High-level command resumed: ${label(command)}")
+        state = State.RUNNING
+        planIterations = 0
+        sendResponse(responseFormatter.started("resume ${label(command)}"))
         executeNextPlan()
     }
 
@@ -70,6 +127,9 @@ class HighLevelController(
 
     private fun executeNextPlan() {
         val command = activeCommand ?: return
+        if (state == State.PAUSED) {
+            return
+        }
         if (state != State.STOPPING) {
             state = if (planIterations == 0) State.RUNNING else State.REPLANNING
         }
@@ -167,6 +227,9 @@ class HighLevelController(
 
     private fun label(command: HighLevelCommand): String = when (command) {
         HighLevelCommand.Status -> "status"
+        HighLevelCommand.Cancel -> "cancel"
+        HighLevelCommand.Pause -> "pause"
+        HighLevelCommand.Resume -> "resume"
         HighLevelCommand.Stop -> "stop"
         is HighLevelCommand.Look -> "look ${command.direction.name.lowercase()}"
         is HighLevelCommand.GoTo -> "goto ${command.objectName ?: command.target}"
@@ -182,6 +245,7 @@ class HighLevelController(
         RUNNING,
         REPLANNING,
         STOPPING,
+        PAUSED,
         FAILED,
         COMPLETED
     }

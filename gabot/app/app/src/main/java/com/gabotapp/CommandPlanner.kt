@@ -8,6 +8,9 @@ class CommandPlanner {
 
         return when (command) {
             HighLevelCommand.Status -> PlanningResult.Complete("status")
+            HighLevelCommand.Cancel -> PlanningResult.Complete("cancel")
+            HighLevelCommand.Pause -> PlanningResult.Complete("pause")
+            HighLevelCommand.Resume -> PlanningResult.Complete("resume")
             HighLevelCommand.Stop -> PlanningResult.Execute(
                 CommandPlan(
                     label = "stop",
@@ -21,9 +24,18 @@ class CommandPlanner {
     }
 
     private fun planLook(command: HighLevelCommand.Look): PlanningResult.Execute {
+        if (command.direction == HighLevelCommand.Direction.CENTER) {
+            return PlanningResult.Execute(
+                CommandPlan(
+                    label = "look center",
+                    commands = listOf(PlannedCommand("shoulder horizontal 0"))
+                )
+            )
+        }
         val speed = when (command.direction) {
             HighLevelCommand.Direction.LEFT -> -LOOK_SPEED
             HighLevelCommand.Direction.RIGHT -> LOOK_SPEED
+            HighLevelCommand.Direction.CENTER -> 0
         }
         return PlanningResult.Execute(
             CommandPlan(

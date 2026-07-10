@@ -86,6 +86,17 @@ class CommandPlannerTest {
         assertEquals("shoulder horizontal 0", result.plan.commands.last().command)
     }
 
+    @Test
+    fun lookCenterStopsHorizontalShoulderMovement() {
+        val result = execute(
+            HighLevelCommand.Look(HighLevelCommand.Direction.CENTER),
+            state(cameraAvailable = false)
+        )
+
+        assertEquals("look center", result.plan.label)
+        assertEquals(listOf("shoulder horizontal 0"), result.plan.commands.map { it.command })
+    }
+
     private fun execute(command: HighLevelCommand, state: RobotState): PlanningResult.Execute {
         val result = planner.plan(command, state)
         assertTrue(result is PlanningResult.Execute)

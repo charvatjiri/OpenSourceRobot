@@ -429,7 +429,7 @@ class MainActivity : ComponentActivity(), SerialInterface.SerialListener, Blueto
             handleHighLevelCommand(normalizedMessage)
         } else {
             if (highLevelController.isActive) {
-                bluetoothServerManager.sendLine("ERR: high-level controller busy")
+                bluetoothServerManager.sendLine(highLevelResponseFormatter.error("high-level controller busy"))
                 return
             }
             pendingBluetoothResponse = ExpectedBluetoothResponse.forCommand(normalizedMessage)

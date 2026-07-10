@@ -17,6 +17,15 @@ class HighLevelCommandParser {
         if (payload.equals("status", ignoreCase = true)) {
             return ParseResult.Success(HighLevelCommand.Status)
         }
+        if (payload.equals("cancel", ignoreCase = true)) {
+            return ParseResult.Success(HighLevelCommand.Cancel)
+        }
+        if (payload.equals("pause", ignoreCase = true)) {
+            return ParseResult.Success(HighLevelCommand.Pause)
+        }
+        if (payload.equals("resume", ignoreCase = true)) {
+            return ParseResult.Success(HighLevelCommand.Resume)
+        }
 
         return try {
             val json = JSONObject(payload)
@@ -32,11 +41,15 @@ class HighLevelCommandParser {
                     when (direction.lowercase()) {
                         "left" -> HighLevelCommand.Look(HighLevelCommand.Direction.LEFT)
                         "right" -> HighLevelCommand.Look(HighLevelCommand.Direction.RIGHT)
+                        "center" -> HighLevelCommand.Look(HighLevelCommand.Direction.CENTER)
                         else -> return ParseResult.Error("invalid look direction: $direction")
                     }
                 }
                 "stop" -> ParseResult.Success(HighLevelCommand.Stop)
                 "status" -> ParseResult.Success(HighLevelCommand.Status)
+                "cancel" -> ParseResult.Success(HighLevelCommand.Cancel)
+                "pause" -> ParseResult.Success(HighLevelCommand.Pause)
+                "resume" -> ParseResult.Success(HighLevelCommand.Resume)
                 "" -> ParseResult.Error("missing high-level action")
                 else -> ParseResult.Error("unknown high-level action: $action")
             }
