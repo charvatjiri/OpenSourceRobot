@@ -30,9 +30,13 @@ class HighLevelResponseFormatterTest {
                 cameraAvailable = true,
                 visionResult = VisionModule.Result(
                     objectVisible = true,
+                    objectName = "apple",
                     centerX = 0.25f,
                     centerY = 0.75f,
+                    width = 0.2f,
+                    height = 0.3f,
                     confidence = 0.8f,
+                    identityConfidence = 0.9f,
                     frameWidth = 640,
                     frameHeight = 480,
                     timestampNanos = 1L
@@ -40,18 +44,26 @@ class HighLevelResponseFormatterTest {
                 activePlan = "look left",
                 currentStep = 2,
                 searchAttempts = 1,
+                collectStage = CollectStage.CENTER_OBJECT,
+                collectCenterAttempts = 2,
+                collectApproachAttempts = 3,
+                collectVerifyAttempts = 4,
                 highLevelState = "RUNNING",
                 lastSerialResponse = "OK motor 80",
                 lastError = null
             ),
-            activeCommandLabel = "collect apple"
+            activeCommand = "collect apple"
         )
 
         assertEquals(
             "INFO status serial=connected bluetooth=disconnected camera=available " +
                 "active=collect_apple state=RUNNING plan=look_left step=2 searchAttempts=1 " +
+                "collectStage=CENTER_OBJECT collectCenterAttempts=2 collectApproachAttempts=3 " +
+                "collectVerifyAttempts=4 " +
                 "lastSerialResponse=OK_motor_80 lastError=none visionVisible=true " +
-                "visionCenterX=0.250 visionCenterY=0.750 visionConfidence=0.800 visionFrame=640x480",
+                "visionObject=apple visionCenterX=0.250 visionCenterY=0.750 " +
+                "visionWidth=0.200 visionHeight=0.300 visionConfidence=0.800 " +
+                "visionIdentityConfidence=0.900 visionFrame=640x480",
             status
         )
     }

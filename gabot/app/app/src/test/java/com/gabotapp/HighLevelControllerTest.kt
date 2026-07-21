@@ -26,8 +26,11 @@ class HighLevelControllerTest {
         assertEquals(
             "INFO status serial=disconnected bluetooth=connected camera=unavailable " +
                 "active=none state=IDLE plan=none step=0 searchAttempts=0 " +
+                "collectStage=none collectCenterAttempts=0 collectApproachAttempts=0 collectVerifyAttempts=0 " +
                 "lastSerialResponse=OK_get_version lastError=camera_unavailable visionVisible=true " +
-                "visionCenterX=0.250 visionCenterY=0.500 visionConfidence=0.900 visionFrame=640x480",
+                "visionObject=apple_red visionCenterX=0.250 visionCenterY=0.500 " +
+                "visionWidth=0.200 visionHeight=0.200 visionConfidence=0.900 " +
+                "visionIdentityConfidence=0.800 visionFrame=640x480",
             fixture.responses.single()
         )
     }
@@ -44,8 +47,11 @@ class HighLevelControllerTest {
         assertEquals(
             "INFO status serial=connected bluetooth=connected camera=available " +
                 "active=look_left state=RUNNING plan=look_left step=1 searchAttempts=0 " +
+                "collectStage=none collectCenterAttempts=0 collectApproachAttempts=0 collectVerifyAttempts=0 " +
                 "lastSerialResponse=none lastError=none visionVisible=true " +
-                "visionCenterX=0.500 visionCenterY=0.500 visionConfidence=0.900 visionFrame=640x480",
+                "visionObject=apple_red visionCenterX=0.500 visionCenterY=0.500 " +
+                "visionWidth=0.200 visionHeight=0.200 visionConfidence=0.900 " +
+                "visionIdentityConfidence=0.800 visionFrame=640x480",
             fixture.responses.last()
         )
     }
@@ -217,6 +223,91 @@ class HighLevelControllerTest {
     }
 
     @Test
+    fun cancelInterruptsActivePlanAndClearsController() {
+        val fixture = Fixture()
+        fixture.controller.handle(HighLevelCommand.Look(HighLevelCommand.Direction.LEFT))
+
+        fixture.controller.handle(HighLevelCommand.Cancel)
+
+        assertFalse(fixture.controller.isActive)
+        assertEquals(HighLevelController.State.IDLE, fixture.controller.state)
+        assertEquals(SerialCommandExecutor.FAIL_STOP_COMMANDS, fixture.failStop)
+        assertEquals("OK hl cancel", fixture.responses.last())
+    }
+
+    @Test
+    fun pauseStopsMotionAndResumeReplansPausedCommand() {
+        val fixture = Fixture()
+        fixture.controller.handle(HighLevelCommand.Look(HighLevelCommand.Direction.RIGHT))
+
+        fixture.controller.handle(HighLevelCommand.Pause)
+
+        assertTrue(fixture.controller.isActive)
+        assertEquals(HighLevelController.State.PAUSED, fixture.controller.state)
+        assertEquals(SerialCommandExecutor.FAIL_STOP_COMMANDS, fixture.failStop)
+        assertEquals("OK hl pause", fixture.responses.last())
+
+        fixture.controller.handle(HighLevelCommand.Resume)
+
+        assertEquals(HighLevelController.State.RUNNING, fixture.controller.state)
+        assertEquals("INFO hl started resume_look_right", fixture.responses[fixture.responses.lastIndex - 1])
+        assertEquals("shoulder horizontal 40", fixture.sent.last())
+    }
+
+    @Test
+    fun resumeWithoutPausedCommandReturnsError() {
+        val fixture = Fixture()
+
+        fixture.controller.handle(HighLevelCommand.Resume)
+
+        assertEquals("ERR hl no_paused_high-level_command_to_resume", fixture.responses.last())
+        assertFalse(fixture.controller.isActive)
+    }
+
+    @Test
+    fun lookCenterUsesOperationalCenterCommand() {
+        val fixture = Fixture()
+
+        fixture.controller.handle(HighLevelCommand.Look(HighLevelCommand.Direction.CENTER))
+        fixture.executor.onSerialLine("OK center")
+
+        assertEquals(listOf("shoulder horizontal 0"), fixture.sent)
+        assertEquals("OK hl look_center", fixture.responses.last())
+        assertFalse(fixture.controller.isActive)
+    }
+
+    @Test
+    fun collectRunsThroughStageBasedApproachVerifyAndGrab() {
+        val fixture = Fixture()
+
+        fixture.controller.handle(HighLevelCommand.Collect("apple"))
+
+        assertEquals("wheels fb 15", fixture.sent.last())
+        assertTrue(fixture.responses.contains("INFO hl replan collect_search_object_found attempt=0"))
+        assertTrue(fixture.responses.contains("INFO hl replan collect_object_centered attempt=0"))
+
+        fixture.executor.onSerialLine("OK approach")
+        fixture.scheduler.advanceBy(350L)
+        assertEquals("wheels fb 0", fixture.sent.last())
+        fixture.executor.onSerialLine("OK approach stop")
+        fixture.scheduler.advanceBy(250L)
+
+        assertEquals("wheels fb 0", fixture.sent.last())
+        fixture.executor.onSerialLine("OK grab wheel stop")
+        assertEquals("wheels rl 0", fixture.sent.last())
+        fixture.executor.onSerialLine("OK grab rotate stop")
+        assertEquals("grab 0", fixture.sent.last())
+        fixture.executor.onSerialLine("OK grab close")
+        fixture.scheduler.advanceBy(500L)
+        assertEquals("grab 1", fixture.sent.last())
+        fixture.executor.onSerialLine("OK grab hold")
+
+        assertEquals("OK hl collect_apple", fixture.responses.last())
+        assertFalse(fixture.controller.isActive)
+        assertEquals(HighLevelController.State.COMPLETED, fixture.controller.state)
+    }
+
+    @Test
     fun disconnectedSerialRejectsCommand() {
         val fixture = Fixture()
         fixture.state = fixture.state.copy(serialConnected = false)
@@ -265,9 +356,13 @@ class HighLevelControllerTest {
     companion object {
         private fun vision(visible: Boolean = true, centerX: Float = 0.5f) = VisionModule.Result(
             objectVisible = visible,
+            objectName = if (visible) "apple_red" else null,
             centerX = centerX,
             centerY = 0.5f,
+            width = if (visible) 0.2f else 0f,
+            height = if (visible) 0.2f else 0f,
             confidence = if (visible) 0.9f else 0f,
+            identityConfidence = if (visible) 0.8f else 0f,
             frameWidth = 640,
             frameHeight = 480,
             timestampNanos = 1L

@@ -3,52 +3,66 @@ package com.gabotapp
 import java.util.Locale
 
 class HighLevelResponseFormatter {
-    fun started(label: String): String = "INFO hl started ${tokenize(label)}"
+    fun started(label: String): String = "INFO hl started ${token(label)}"
 
     fun progress(step: Int, total: Int, command: String): String {
-        return "INFO hl step $step/$total ${tokenize(command)}"
+        return "INFO hl step $step/$total ${token(command)}"
     }
 
-    fun replan(label: String, searchAttempts: Int): String {
-        return "INFO hl replan ${tokenize(label)} attempt=$searchAttempts"
+    fun replan(label: String, attempt: Int): String {
+        return "INFO hl replan ${token(label)} attempt=$attempt"
     }
 
-    fun success(message: String): String = "OK hl ${tokenize(message)}"
+    fun success(message: String): String = "OK hl ${token(message)}"
 
-    fun error(message: String): String {
-        val normalized = message.removePrefix("ERR:").trim()
-        return "ERR hl ${tokenize(normalized)}"
-    }
+    fun error(message: String): String = "ERR hl ${token(message)}"
 
-    fun status(state: RobotState, activeCommandLabel: String?): String {
+    fun status(state: RobotState, activeCommand: String?): String {
         val vision = state.visionResult
         return listOf(
             "INFO status",
-            "serial=${if (state.serialConnected) "connected" else "disconnected"}",
-            "bluetooth=${if (state.bluetoothClientConnected) "connected" else "disconnected"}",
-            "camera=${if (state.cameraAvailable) "available" else "unavailable"}",
-            "active=${tokenize(activeCommandLabel)}",
+            "serial=${connected(state.serialConnected)}",
+            "bluetooth=${connected(state.bluetoothClientConnected)}",
+            "camera=${available(state.cameraAvailable)}",
+            "active=${tokenOrNone(activeCommand)}",
             "state=${state.highLevelState}",
-            "plan=${tokenize(state.activePlan)}",
+            "plan=${tokenOrNone(state.activePlan)}",
             "step=${state.currentStep}",
             "searchAttempts=${state.searchAttempts}",
-            "lastSerialResponse=${tokenize(state.lastSerialResponse)}",
-            "lastError=${tokenize(state.lastError)}",
+            "collectStage=${state.collectStage?.name ?: "none"}",
+            "collectCenterAttempts=${state.collectCenterAttempts}",
+            "collectApproachAttempts=${state.collectApproachAttempts}",
+            "collectVerifyAttempts=${state.collectVerifyAttempts}",
+            "lastSerialResponse=${tokenOrNone(state.lastSerialResponse)}",
+            "lastError=${tokenOrNone(state.lastError)}",
             "visionVisible=${vision.objectVisible}",
+            "visionObject=${tokenOrNone(vision.objectName)}",
             "visionCenterX=${formatFloat(vision.centerX)}",
             "visionCenterY=${formatFloat(vision.centerY)}",
+            "visionWidth=${formatFloat(vision.width)}",
+            "visionHeight=${formatFloat(vision.height)}",
             "visionConfidence=${formatFloat(vision.confidence)}",
+            "visionIdentityConfidence=${formatFloat(vision.identityConfidence)}",
             "visionFrame=${vision.frameWidth}x${vision.frameHeight}"
         ).joinToString(" ")
     }
 
-    private fun formatFloat(value: Float): String = String.format(Locale.US, "%.3f", value)
+    private fun connected(value: Boolean): String = if (value) "connected" else "disconnected"
 
-    private fun tokenize(value: String?): String {
-        return value
-            ?.trim()
-            ?.ifEmpty { null }
-            ?.replace(Regex("\\s+"), "_")
-            ?: "none"
+    private fun available(value: Boolean): String = if (value) "available" else "unavailable"
+
+    private fun tokenOrNone(value: String?): String = value?.let(::token) ?: "none"
+
+    private fun token(value: String): String {
+        val normalized = value.trim()
+            .removePrefix("ERR:")
+            .removePrefix("ERR")
+            .trim()
+        if (normalized.isBlank()) {
+            return "none"
+        }
+        return normalized.replace(Regex("[^A-Za-z0-9_.-]+"), "_").trim('_')
     }
+
+    private fun formatFloat(value: Float): String = String.format(Locale.US, "%.3f", value)
 }

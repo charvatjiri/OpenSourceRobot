@@ -21,10 +21,20 @@ class HighLevelCommandParserTest {
             HighLevelCommand.Look(HighLevelCommand.Direction.LEFT),
             success("hl:{\"action\":\"look\",\"direction\":\"left\"}")
         )
+        assertEquals(
+            HighLevelCommand.Look(HighLevelCommand.Direction.CENTER),
+            success("hl:{\"action\":\"look\",\"direction\":\"center\"}")
+        )
         assertEquals(HighLevelCommand.Stop, success("hl:{\"action\":\"stop\"}"))
         assertEquals(HighLevelCommand.Stop, success("hl:stop"))
         assertEquals(HighLevelCommand.Status, success("hl:{\"action\":\"status\"}"))
         assertEquals(HighLevelCommand.Status, success("hl:status"))
+        assertEquals(HighLevelCommand.Cancel, success("hl:{\"action\":\"cancel\"}"))
+        assertEquals(HighLevelCommand.Cancel, success("hl:cancel"))
+        assertEquals(HighLevelCommand.Pause, success("hl:{\"action\":\"pause\"}"))
+        assertEquals(HighLevelCommand.Pause, success("hl:pause"))
+        assertEquals(HighLevelCommand.Resume, success("hl:{\"action\":\"resume\"}"))
+        assertEquals(HighLevelCommand.Resume, success("hl:resume"))
         assertEquals(
             HighLevelCommand.GoTo("visible_object", null),
             success("hl:{\"action\":\"goto\",\"target\":\"visible_object\"}")
