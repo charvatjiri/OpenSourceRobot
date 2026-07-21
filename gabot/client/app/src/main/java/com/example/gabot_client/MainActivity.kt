@@ -11,7 +11,9 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -21,6 +23,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
@@ -28,6 +33,9 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -35,14 +43,21 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.example.gabot_client.ui.theme.GabotClientTheme
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity(), GabotBluetoothClient.Listener {
 
@@ -102,6 +117,7 @@ class MainActivity : ComponentActivity(), GabotBluetoothClient.Listener {
                         onDisconnect = ::disconnect,
                         onCommandChange = { commandText = it },
                         onSend = ::sendCommand,
+                        onControllerCommand = ::sendDirectCommand,
                         onClearLog = { logMessages.clear() },
                         modifier = Modifier.padding(innerPadding)
                     )
@@ -172,6 +188,13 @@ class MainActivity : ComponentActivity(), GabotBluetoothClient.Listener {
         bluetoothClient.disconnect()
     }
 
+    private fun sendDirectCommand(command: String) {
+        if (bluetoothClient.sendLine(command)) {
+            Log.d(TAG, "BT TX controller command='$command'")
+            addLog("TX: $command")
+        }
+    }
+
     private fun sendCommand() {
         val command = commandText.trimEnd('\r', '\n')
         if (bluetoothClient.sendLine(command)) {
@@ -214,6 +237,9 @@ class MainActivity : ComponentActivity(), GabotBluetoothClient.Listener {
 
 }
 
+private const val WRIST_STEP_DEGREES = 1
+private const val WRIST_STEP_INTERVAL_MS = 20L
+
 @Composable
 private fun ClientScreen(
     devices: List<GabotBluetoothClient.DeviceInfo>,
@@ -228,11 +254,37 @@ private fun ClientScreen(
     onDisconnect: () -> Unit,
     onCommandChange: (String) -> Unit,
     onSend: () -> Unit,
+    onControllerCommand: (String) -> Unit,
     onClearLog: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val maxLogHeight = LocalConfiguration.current.screenHeightDp.dp / 2
     val contentScrollState = rememberScrollState()
+    val controllerScrollState = rememberScrollState()
+    var selectedTab by rememberSaveable { mutableStateOf(0) }
+
+    if (selectedTab == 1) {
+        Column(
+            modifier = modifier
+                .fillMaxSize()
+                .verticalScroll(controllerScrollState)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            ClientHeader(statusText = statusText)
+            TabSelector(
+                selectedTab = selectedTab,
+                onTabSelected = { selectedTab = it }
+            )
+            DirectController(
+                enabled = connected,
+                onCommand = onControllerCommand,
+                modifier = Modifier
+                    .fillMaxWidth()
+            )
+        }
+        return
+    }
 
     Column(
         modifier = modifier
@@ -247,19 +299,11 @@ private fun ClientScreen(
                 .verticalScroll(contentScrollState),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text("GabotClient", style = MaterialTheme.typography.headlineMedium)
-                Text(
-                    "v${BuildConfig.MAJOR_VER}.${BuildConfig.MINOR_VER}.${BuildConfig.MICRO_VER}",
-                    style = MaterialTheme.typography.titleMedium
-                )
-            }
-            Text("BT 4.2+ classic RFCOMM serial-command client", style = MaterialTheme.typography.bodyMedium)
-            Text("Status: $statusText", style = MaterialTheme.typography.titleMedium)
+            ClientHeader(statusText = statusText)
+            TabSelector(
+                selectedTab = selectedTab,
+                onTabSelected = { selectedTab = it }
+            )
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = onRefresh, enabled = !connected) {
@@ -327,6 +371,488 @@ private fun ClientScreen(
                 logMessages = logMessages,
                 modifier = Modifier.heightIn(max = maxLogHeight)
             )
+        }
+    }
+}
+
+@Composable
+private fun ClientHeader(statusText: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text("GabotClient", style = MaterialTheme.typography.headlineMedium)
+        Text(
+            "v${BuildConfig.MAJOR_VER}.${BuildConfig.MINOR_VER}.${BuildConfig.MICRO_VER}",
+            style = MaterialTheme.typography.titleMedium
+        )
+    }
+    Text("BT 4.2+ classic RFCOMM serial-command client", style = MaterialTheme.typography.bodyMedium)
+    Text("Status: $statusText", style = MaterialTheme.typography.titleMedium)
+}
+
+@Composable
+private fun TabSelector(
+    selectedTab: Int,
+    onTabSelected: (Int) -> Unit
+) {
+    TabRow(selectedTabIndex = selectedTab) {
+        Tab(
+            selected = selectedTab == 0,
+            onClick = { onTabSelected(0) },
+            text = { Text("Console") }
+        )
+        Tab(
+            selected = selectedTab == 1,
+            onClick = { onTabSelected(1) },
+            text = { Text("Controller") }
+        )
+    }
+}
+
+@Composable
+private fun DirectController(
+    enabled: Boolean,
+    onCommand: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val configuration = LocalConfiguration.current
+    val isLandscape = configuration.screenWidthDp > configuration.screenHeightDp
+
+    if (!isLandscape) {
+        Column(
+            modifier = modifier
+                .padding(vertical = 8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(18.dp)
+        ) {
+            GrabReleaseControls(
+                enabled = enabled,
+                onCommand = onCommand,
+                horizontal = true,
+                modifier = Modifier
+                    .widthIn(max = 380.dp)
+                    .fillMaxWidth()
+            )
+            WristPad(
+                enabled = enabled,
+                onCommand = onCommand,
+                modifier = Modifier
+                    .widthIn(max = 380.dp)
+                    .fillMaxWidth()
+            )
+            ArmPad(
+                enabled = enabled,
+                onCommand = onCommand,
+                modifier = Modifier
+                    .widthIn(max = 380.dp)
+                    .fillMaxWidth()
+            )
+            WheelsPad(
+                enabled = enabled,
+                onCommand = onCommand,
+                modifier = Modifier
+                    .widthIn(max = 380.dp)
+                    .fillMaxWidth()
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+        }
+        return
+    }
+
+    Row(
+        modifier = modifier.padding(vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        GrabReleaseControls(
+            enabled = enabled,
+            onCommand = onCommand,
+            modifier = Modifier.width(96.dp)
+        )
+        WristPad(
+            enabled = enabled,
+            onCommand = onCommand,
+            modifier = Modifier.weight(1f)
+        )
+        ArmPad(
+            enabled = enabled,
+            onCommand = onCommand,
+            modifier = Modifier.weight(1f)
+        )
+        WheelsPad(
+            enabled = enabled,
+            onCommand = onCommand,
+            modifier = Modifier.weight(1f)
+        )
+    }
+}
+
+@Composable
+private fun GrabReleaseControls(
+    enabled: Boolean,
+    onCommand: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    horizontal: Boolean = false
+) {
+    if (horizontal) {
+        Row(
+            modifier = modifier,
+            horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            HoldCommandButton(
+                label = "GRAB",
+                enabled = enabled,
+                pressCommand = "grab 1",
+                releaseCommand = "grab 0",
+                onCommand = onCommand
+            )
+            HoldCommandButton(
+                label = "RELEASE",
+                enabled = enabled,
+                pressCommand = "release 1",
+                releaseCommand = "release 0",
+                onCommand = onCommand
+            )
+        }
+        return
+    }
+
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        HoldCommandButton(
+            label = "GRAB",
+            enabled = enabled,
+            pressCommand = "grab 1",
+            releaseCommand = "grab 0",
+            onCommand = onCommand
+        )
+        HoldCommandButton(
+            label = "RELEASE",
+            enabled = enabled,
+            pressCommand = "release 1",
+            releaseCommand = "release 0",
+            onCommand = onCommand
+        )
+    }
+}
+
+@Composable
+private fun WristPad(
+    enabled: Boolean,
+    onCommand: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val configuration = LocalConfiguration.current
+    val compact = configuration.screenWidthDp > configuration.screenHeightDp
+    val buttonWidth = if (compact) 60.dp else 78.dp
+    val buttonHeight = if (compact) 48.dp else 52.dp
+    val centerSize = if (compact) 38.dp else 46.dp
+    val buttonSpacing = if (compact) 4.dp else 6.dp
+    var horizontalPosition by rememberSaveable { mutableStateOf(80) }
+    var verticalPosition by rememberSaveable { mutableStateOf(100) }
+
+    fun moveHorizontal(delta: Int) {
+        val nextPosition = (horizontalPosition + delta).coerceIn(10, 150)
+        if (nextPosition != horizontalPosition) {
+            horizontalPosition = nextPosition
+            onCommand("wrist horizontal $nextPosition")
+        }
+    }
+
+    fun moveVertical(delta: Int) {
+        val nextPosition = (verticalPosition + delta).coerceIn(50, 150)
+        if (nextPosition != verticalPosition) {
+            verticalPosition = nextPosition
+            onCommand("wrist vertical $nextPosition")
+        }
+    }
+
+    Card(modifier = modifier) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Text("WRIST", style = MaterialTheme.typography.titleSmall)
+            RepeatingCommandButton(
+                label = "UP",
+                enabled = enabled,
+                onStep = { moveVertical(-WRIST_STEP_DEGREES) },
+                width = buttonWidth,
+                height = buttonHeight
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(
+                    buttonSpacing,
+                    Alignment.CenterHorizontally
+                ),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                RepeatingCommandButton(
+                    label = "L",
+                    enabled = enabled,
+                    onStep = { moveHorizontal(WRIST_STEP_DEGREES) },
+                    width = buttonWidth,
+                    height = buttonHeight
+                )
+                Box(modifier = Modifier.size(centerSize), contentAlignment = Alignment.Center) {
+                    Text("+", style = MaterialTheme.typography.titleLarge)
+                }
+                RepeatingCommandButton(
+                    label = "R",
+                    enabled = enabled,
+                    onStep = { moveHorizontal(-WRIST_STEP_DEGREES) },
+                    width = buttonWidth,
+                    height = buttonHeight
+                )
+            }
+            RepeatingCommandButton(
+                label = "DOWN",
+                enabled = enabled,
+                onStep = { moveVertical(WRIST_STEP_DEGREES) },
+                width = buttonWidth,
+                height = buttonHeight
+            )
+        }
+    }
+}
+
+@Composable
+private fun ArmPad(
+    enabled: Boolean,
+    onCommand: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    ControllerPad(
+        title = "ARM",
+        upLabel = "UP",
+        downLabel = "DOWN",
+        leftLabel = "L",
+        rightLabel = "R",
+        enabled = enabled,
+        upCommand = "shoulder vertical -50",
+        downCommand = "shoulder vertical 30",
+        leftCommand = "shoulder horizontal -40",
+        rightCommand = "shoulder horizontal 40",
+        verticalStopCommand = "shoulder vertical 0",
+        horizontalStopCommand = "shoulder horizontal 0",
+        onCommand = onCommand,
+        modifier = modifier
+    )
+}
+
+@Composable
+private fun WheelsPad(
+    enabled: Boolean,
+    onCommand: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    ControllerPad(
+        title = "WHEELS",
+        upLabel = "FORWARD",
+        downLabel = "BACK",
+        leftLabel = "L",
+        rightLabel = "R",
+        enabled = enabled,
+        upCommand = "wheels fb 15",
+        downCommand = "wheels fb -15",
+        leftCommand = "wheels rl -15",
+        rightCommand = "wheels rl 15",
+        verticalStopCommand = "wheels fb 0",
+        horizontalStopCommand = "wheels rl 0",
+        onCommand = onCommand,
+        modifier = modifier
+    )
+}
+
+@Composable
+private fun ControllerPad(
+    title: String,
+    upLabel: String,
+    downLabel: String,
+    leftLabel: String,
+    rightLabel: String,
+    enabled: Boolean,
+    upCommand: String,
+    downCommand: String,
+    leftCommand: String,
+    rightCommand: String,
+    verticalStopCommand: String?,
+    horizontalStopCommand: String?,
+    onCommand: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val configuration = LocalConfiguration.current
+    val compact = configuration.screenWidthDp > configuration.screenHeightDp
+    val buttonWidth = if (compact) 60.dp else 78.dp
+    val buttonHeight = if (compact) 48.dp else 52.dp
+    val centerSize = if (compact) 38.dp else 46.dp
+    val buttonSpacing = if (compact) 4.dp else 6.dp
+
+    Card(modifier = modifier) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Text(title, style = MaterialTheme.typography.titleSmall)
+            HoldCommandButton(
+                label = upLabel,
+                enabled = enabled,
+                pressCommand = upCommand,
+                releaseCommand = verticalStopCommand,
+                onCommand = onCommand,
+                width = buttonWidth,
+                height = buttonHeight
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(
+                    buttonSpacing,
+                    Alignment.CenterHorizontally
+                ),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                HoldCommandButton(
+                    label = leftLabel,
+                    enabled = enabled,
+                    pressCommand = leftCommand,
+                    releaseCommand = horizontalStopCommand,
+                    onCommand = onCommand,
+                    width = buttonWidth,
+                    height = buttonHeight
+                )
+                Box(modifier = Modifier.size(centerSize), contentAlignment = Alignment.Center) {
+                    Text("+", style = MaterialTheme.typography.titleLarge)
+                }
+                HoldCommandButton(
+                    label = rightLabel,
+                    enabled = enabled,
+                    pressCommand = rightCommand,
+                    releaseCommand = horizontalStopCommand,
+                    onCommand = onCommand,
+                    width = buttonWidth,
+                    height = buttonHeight
+                )
+            }
+            HoldCommandButton(
+                label = downLabel,
+                enabled = enabled,
+                pressCommand = downCommand,
+                releaseCommand = verticalStopCommand,
+                onCommand = onCommand,
+                width = buttonWidth,
+                height = buttonHeight
+            )
+        }
+    }
+}
+
+@Composable
+private fun HoldCommandButton(
+    label: String,
+    enabled: Boolean,
+    pressCommand: String,
+    releaseCommand: String?,
+    onCommand: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    width: androidx.compose.ui.unit.Dp = 78.dp,
+    height: androidx.compose.ui.unit.Dp = 52.dp
+) {
+    Surface(
+        modifier = modifier
+            .size(width = width, height = height)
+            .pointerInput(enabled, pressCommand, releaseCommand) {
+                detectTapGestures(
+                    onPress = {
+                        if (!enabled) {
+                            return@detectTapGestures
+                        }
+                        onCommand(pressCommand)
+                        tryAwaitRelease()
+                        releaseCommand?.let(onCommand)
+                    }
+                )
+            },
+        shape = MaterialTheme.shapes.medium,
+        color = if (enabled) {
+            MaterialTheme.colorScheme.primaryContainer
+        } else {
+            MaterialTheme.colorScheme.surfaceVariant
+        },
+        contentColor = if (enabled) {
+            MaterialTheme.colorScheme.onPrimaryContainer
+        } else {
+            MaterialTheme.colorScheme.onSurfaceVariant
+        }
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Text(label, style = MaterialTheme.typography.labelLarge)
+        }
+    }
+}
+
+@Composable
+private fun RepeatingCommandButton(
+    label: String,
+    enabled: Boolean,
+    onStep: () -> Unit,
+    modifier: Modifier = Modifier,
+    width: androidx.compose.ui.unit.Dp = 78.dp,
+    height: androidx.compose.ui.unit.Dp = 52.dp
+) {
+    val currentOnStep by rememberUpdatedState(onStep)
+
+    Surface(
+        modifier = modifier
+            .size(width = width, height = height)
+            .pointerInput(enabled) {
+                detectTapGestures(
+                    onPress = {
+                        if (!enabled) {
+                            return@detectTapGestures
+                        }
+                        coroutineScope {
+                            val movementJob = launch {
+                                while (true) {
+                                    currentOnStep()
+                                    delay(WRIST_STEP_INTERVAL_MS)
+                                }
+                            }
+                            try {
+                                tryAwaitRelease()
+                            } finally {
+                                movementJob.cancel()
+                            }
+                        }
+                    }
+                )
+            },
+        shape = MaterialTheme.shapes.medium,
+        color = if (enabled) {
+            MaterialTheme.colorScheme.primaryContainer
+        } else {
+            MaterialTheme.colorScheme.surfaceVariant
+        },
+        contentColor = if (enabled) {
+            MaterialTheme.colorScheme.onPrimaryContainer
+        } else {
+            MaterialTheme.colorScheme.onSurfaceVariant
+        }
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Text(label, style = MaterialTheme.typography.labelLarge)
         }
     }
 }
