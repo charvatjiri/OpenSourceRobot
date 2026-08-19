@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -x /usr/lib/jvm/java-21-openjdk-amd64/bin/java ]]; then
+    export JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64
+fi
+exec "$SCRIPT_DIR/../client/gradlew" -p "$SCRIPT_DIR" "$@"
