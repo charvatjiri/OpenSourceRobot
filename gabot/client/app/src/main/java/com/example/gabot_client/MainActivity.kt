@@ -55,6 +55,8 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.example.gabot_client.ui.theme.GabotClientTheme
+import com.gabot.shared.ControllerCommands
+import com.gabot.shared.WristPosition
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -236,9 +238,6 @@ class MainActivity : ComponentActivity(), GabotBluetoothClient.Listener {
     }
 
 }
-
-private const val WRIST_STEP_DEGREES = 1
-private const val WRIST_STEP_INTERVAL_MS = 20L
 
 @Composable
 private fun ClientScreen(
@@ -505,15 +504,15 @@ private fun GrabReleaseControls(
             HoldCommandButton(
                 label = "GRAB",
                 enabled = enabled,
-                pressCommand = "grab 1",
-                releaseCommand = "grab 0",
+                pressCommand = ControllerCommands.GRAB_START,
+                releaseCommand = ControllerCommands.GRAB_STOP,
                 onCommand = onCommand
             )
             HoldCommandButton(
                 label = "RELEASE",
                 enabled = enabled,
-                pressCommand = "release 1",
-                releaseCommand = "release 0",
+                pressCommand = ControllerCommands.RELEASE_START,
+                releaseCommand = ControllerCommands.RELEASE_STOP,
                 onCommand = onCommand
             )
         }
@@ -528,15 +527,15 @@ private fun GrabReleaseControls(
         HoldCommandButton(
             label = "GRAB",
             enabled = enabled,
-            pressCommand = "grab 1",
-            releaseCommand = "grab 0",
+            pressCommand = ControllerCommands.GRAB_START,
+            releaseCommand = ControllerCommands.GRAB_STOP,
             onCommand = onCommand
         )
         HoldCommandButton(
             label = "RELEASE",
             enabled = enabled,
-            pressCommand = "release 1",
-            releaseCommand = "release 0",
+            pressCommand = ControllerCommands.RELEASE_START,
+            releaseCommand = ControllerCommands.RELEASE_STOP,
             onCommand = onCommand
         )
     }
@@ -558,18 +557,24 @@ private fun WristPad(
     var verticalPosition by rememberSaveable { mutableStateOf(100) }
 
     fun moveHorizontal(delta: Int) {
-        val nextPosition = (horizontalPosition + delta).coerceIn(10, 150)
+        val nextPosition = (horizontalPosition + delta).coerceIn(
+            WristPosition.HORIZONTAL_MIN,
+            WristPosition.HORIZONTAL_MAX
+        )
         if (nextPosition != horizontalPosition) {
             horizontalPosition = nextPosition
-            onCommand("wrist horizontal $nextPosition")
+            onCommand(ControllerCommands.wristHorizontal(nextPosition))
         }
     }
 
     fun moveVertical(delta: Int) {
-        val nextPosition = (verticalPosition + delta).coerceIn(50, 150)
+        val nextPosition = (verticalPosition + delta).coerceIn(
+            WristPosition.VERTICAL_MIN,
+            WristPosition.VERTICAL_MAX
+        )
         if (nextPosition != verticalPosition) {
             verticalPosition = nextPosition
-            onCommand("wrist vertical $nextPosition")
+            onCommand(ControllerCommands.wristVertical(nextPosition))
         }
     }
 
@@ -585,7 +590,7 @@ private fun WristPad(
             RepeatingCommandButton(
                 label = "UP",
                 enabled = enabled,
-                onStep = { moveVertical(-WRIST_STEP_DEGREES) },
+                onStep = { moveVertical(-WristPosition.STEP_DEGREES) },
                 width = buttonWidth,
                 height = buttonHeight
             )
@@ -600,7 +605,7 @@ private fun WristPad(
                 RepeatingCommandButton(
                     label = "L",
                     enabled = enabled,
-                    onStep = { moveHorizontal(WRIST_STEP_DEGREES) },
+                    onStep = { moveHorizontal(WristPosition.STEP_DEGREES) },
                     width = buttonWidth,
                     height = buttonHeight
                 )
@@ -610,7 +615,7 @@ private fun WristPad(
                 RepeatingCommandButton(
                     label = "R",
                     enabled = enabled,
-                    onStep = { moveHorizontal(-WRIST_STEP_DEGREES) },
+                    onStep = { moveHorizontal(-WristPosition.STEP_DEGREES) },
                     width = buttonWidth,
                     height = buttonHeight
                 )
@@ -618,7 +623,7 @@ private fun WristPad(
             RepeatingCommandButton(
                 label = "DOWN",
                 enabled = enabled,
-                onStep = { moveVertical(WRIST_STEP_DEGREES) },
+                onStep = { moveVertical(WristPosition.STEP_DEGREES) },
                 width = buttonWidth,
                 height = buttonHeight
             )
@@ -639,12 +644,12 @@ private fun ArmPad(
         leftLabel = "L",
         rightLabel = "R",
         enabled = enabled,
-        upCommand = "shoulder vertical -50",
-        downCommand = "shoulder vertical 30",
-        leftCommand = "shoulder horizontal -40",
-        rightCommand = "shoulder horizontal 40",
-        verticalStopCommand = "shoulder vertical 0",
-        horizontalStopCommand = "shoulder horizontal 0",
+        upCommand = ControllerCommands.ARM_UP,
+        downCommand = ControllerCommands.ARM_DOWN,
+        leftCommand = ControllerCommands.ARM_LEFT,
+        rightCommand = ControllerCommands.ARM_RIGHT,
+        verticalStopCommand = ControllerCommands.ARM_VERTICAL_STOP,
+        horizontalStopCommand = ControllerCommands.ARM_HORIZONTAL_STOP,
         onCommand = onCommand,
         modifier = modifier
     )
@@ -663,12 +668,12 @@ private fun WheelsPad(
         leftLabel = "L",
         rightLabel = "R",
         enabled = enabled,
-        upCommand = "wheels fb 15",
-        downCommand = "wheels fb -15",
-        leftCommand = "wheels rl -15",
-        rightCommand = "wheels rl 15",
-        verticalStopCommand = "wheels fb 0",
-        horizontalStopCommand = "wheels rl 0",
+        upCommand = ControllerCommands.WHEELS_FORWARD,
+        downCommand = ControllerCommands.WHEELS_BACK,
+        leftCommand = ControllerCommands.WHEELS_LEFT,
+        rightCommand = ControllerCommands.WHEELS_RIGHT,
+        verticalStopCommand = ControllerCommands.WHEELS_FB_STOP,
+        horizontalStopCommand = ControllerCommands.WHEELS_RL_STOP,
         onCommand = onCommand,
         modifier = modifier
     )
@@ -827,7 +832,7 @@ private fun RepeatingCommandButton(
                             val movementJob = launch {
                                 while (true) {
                                     currentOnStep()
-                                    delay(WRIST_STEP_INTERVAL_MS)
+                                    delay(WristPosition.STEP_INTERVAL_MS)
                                 }
                             }
                             try {

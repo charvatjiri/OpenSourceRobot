@@ -6,7 +6,7 @@ plugins {
 
 val majorVer = 0
 val minorVer = 1
-val microVer = 10
+val microVer = 11
 
 android {
     namespace = "com.example.gabot_client"
@@ -46,6 +46,7 @@ android {
         compose = true
         buildConfig = true
     }
+    sourceSets["main"].java.srcDir("../../shared/src/main/kotlin")
 
     applicationVariants.all {
         val variant = this
