@@ -41,12 +41,14 @@ On Windows, set `JAVA_HOME` to the JDK 21 installation before running `gradlew.b
 
 ## Application log
 
-GabotPcClient writes every UI log entry to `gabot-pc-client.log`. A user-space installation stores the file beside the application launcher. A system installation under `/usr` or `/opt` stores it at `/var/log/gabot-pc-client.log`.
+GabotPcClient writes every UI log entry to `gabot-pc-client.log`. A user-space installation stores the file beside the application launcher. A system installation under `/usr` or `/opt` stores it at `/var/log/gabot-pc-client.log`. The active log rotates at 5 MiB and retains five archives named `.1` through `.5`, where `.1` is the newest.
 
 The user running a system installation must have write access to the system log file. It can be prepared on Linux with:
 
 ```bash
-sudo install -o "$USER" -g adm -m 664 /dev/null /var/log/gabot-pc-client.log
+for suffix in "" .1 .2 .3 .4 .5; do
+    sudo install -o "$USER" -g adm -m 664 /dev/null "/var/log/gabot-pc-client.log${suffix}"
+done
 ```
 
 If the system log is not writable, the application reports a warning and falls back to `gabot-pc-client.log` in its current working directory.

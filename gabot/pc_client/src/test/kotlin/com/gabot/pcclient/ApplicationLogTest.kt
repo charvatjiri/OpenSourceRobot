@@ -2,6 +2,7 @@ package com.gabot.pcclient
 
 import java.nio.file.Path
 import kotlin.io.path.createTempDirectory
+import kotlin.io.path.exists
 import kotlin.io.path.readText
 import kotlin.test.Test
 import kotlin.test.assertContains
@@ -47,5 +48,25 @@ class ApplicationLogTest {
 
         assertTrue(log.append("TX: version"))
         assertContains(log.path.readText(), " TX: version")
+    }
+
+    @Test
+    fun `log rotates oldest entries into bounded archives`() {
+        val logDirectory = createTempDirectory("gabot-pc-log-rotation-test")
+        val log = ApplicationLog.create(
+            applicationPath = null,
+            workingDirectory = logDirectory,
+            maxFileSizeBytes = 50,
+            maxArchives = 2
+        )
+
+        assertTrue(log.append("first-message"))
+        assertTrue(log.append("second-message"))
+        assertTrue(log.append("third-message"))
+
+        assertContains(log.path.readText(), " third-message")
+        assertContains(logDirectory.resolve("${ApplicationLog.FILE_NAME}.1").readText(), " second-message")
+        assertContains(logDirectory.resolve("${ApplicationLog.FILE_NAME}.2").readText(), " first-message")
+        assertTrue(!logDirectory.resolve("${ApplicationLog.FILE_NAME}.3").exists())
     }
 }
