@@ -38,3 +38,15 @@ Create a native package for the current operating system:
 
 Native packaging requires JDK 21 with `jpackage`. Linux produces a DEB package; Windows produces an MSI package.
 On Windows, set `JAVA_HOME` to the JDK 21 installation before running `gradlew.bat`.
+
+## Application log
+
+GabotPcClient writes every UI log entry to `gabot-pc-client.log`. A user-space installation stores the file beside the application launcher. A system installation under `/usr` or `/opt` stores it at `/var/log/gabot-pc-client.log`.
+
+The user running a system installation must have write access to the system log file. It can be prepared on Linux with:
+
+```bash
+sudo install -o "$USER" -g adm -m 664 /dev/null /var/log/gabot-pc-client.log
+```
+
+If the system log is not writable, the application reports a warning and falls back to `gabot-pc-client.log` in its current working directory.

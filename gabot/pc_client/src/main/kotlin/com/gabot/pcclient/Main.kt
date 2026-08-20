@@ -58,7 +58,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-private const val APP_VERSION = "0.1.0"
+private const val APP_VERSION = "0.1.1"
 
 fun main() = application {
     val appState = remember { GabotPcState() }
@@ -93,6 +93,8 @@ fun main() = application {
 
 private class GabotPcState : SerialBluetoothClient.Listener {
     private val client = SerialBluetoothClient().also { it.listener = this }
+    private val applicationLog = ApplicationLog.create()
+    private var logWriteErrorShown = false
 
     val ports = mutableStateListOf<SerialBluetoothClient.PortInfo>()
     val logMessages = mutableStateListOf<String>()
@@ -100,6 +102,12 @@ private class GabotPcState : SerialBluetoothClient.Listener {
     var connected by mutableStateOf(false)
     var statusText by mutableStateOf("Disconnected")
     var commandText by mutableStateOf("version")
+
+    init {
+        applicationLog.warning?.let { addLog("WARN: $it") }
+        addLog("Log file: ${applicationLog.path}")
+        addLog("GabotPcClient $APP_VERSION started")
+    }
 
     fun refreshPorts() {
         val previousName = selectedPort?.systemName
@@ -148,6 +156,12 @@ private class GabotPcState : SerialBluetoothClient.Listener {
     private fun addLog(message: String) {
         logMessages.add(message)
         if (logMessages.size > 1000) logMessages.removeRange(0, 100)
+        if (!applicationLog.append(message) && !logWriteErrorShown) {
+            logWriteErrorShown = true
+            val error = "ERR: Cannot write log file ${applicationLog.path}"
+            logMessages.add(error)
+            System.err.println(error)
+        }
     }
 }
 
