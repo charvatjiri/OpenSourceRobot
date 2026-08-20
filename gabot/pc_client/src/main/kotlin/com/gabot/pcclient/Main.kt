@@ -58,7 +58,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-private const val APP_VERSION = "0.1.2"
+private const val APP_VERSION = "0.1.3"
 
 fun main() = application {
     val appState = remember { GabotPcState() }

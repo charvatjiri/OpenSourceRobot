@@ -1,8 +1,11 @@
 package com.gabot.pcclient
 
 import com.fazecast.jSerialComm.SerialPort
+import com.fazecast.jSerialComm.SerialPortTimeoutException
 import java.awt.EventQueue
+import java.io.ByteArrayOutputStream
 import java.io.IOException
+import java.io.InputStream
 import kotlin.concurrent.thread
 
 class SerialBluetoothClient {
@@ -92,9 +95,11 @@ class SerialBluetoothClient {
     private fun startReadLoop(activePort: SerialPort) {
         readThread = thread(name = "gabot-pc-bt-read", isDaemon = true) {
             try {
-                activePort.inputStream.bufferedReader(Charsets.UTF_8).use { reader ->
-                    while (activePort == port && activePort.isOpen) {
-                        val line = reader.readLine() ?: break
+                activePort.inputStream.use { inputStream ->
+                    readSerialLines(
+                        inputStream = inputStream,
+                        shouldContinue = { activePort == port && activePort.isOpen }
+                    ) { line ->
                         dispatch { listener?.onLineReceived(line) }
                     }
                 }
@@ -144,3 +149,35 @@ class SerialBluetoothClient {
         }
     }
 }
+
+internal fun readSerialLines(
+    inputStream: InputStream,
+    shouldContinue: () -> Boolean,
+    onLine: (String) -> Unit
+) {
+    val lineBuffer = ByteArrayOutputStream()
+    while (shouldContinue()) {
+        val nextByte = try {
+            inputStream.read()
+        } catch (_: SerialPortTimeoutException) {
+            continue
+        }
+
+        if (nextByte < 0) {
+            return
+        }
+        if (nextByte == '\n'.code) {
+            val bytes = lineBuffer.toByteArray()
+            lineBuffer.reset()
+            val contentLength = if (bytes.lastOrNull() == '\r'.code.toByte()) bytes.size - 1 else bytes.size
+            onLine(String(bytes, 0, contentLength, Charsets.UTF_8))
+        } else {
+            lineBuffer.write(nextByte)
+            if (lineBuffer.size() > MAX_RESPONSE_LINE_BYTES) {
+                throw IOException("Bluetooth response exceeds $MAX_RESPONSE_LINE_BYTES bytes")
+            }
+        }
+    }
+}
+
+private const val MAX_RESPONSE_LINE_BYTES = 64 * 1024
