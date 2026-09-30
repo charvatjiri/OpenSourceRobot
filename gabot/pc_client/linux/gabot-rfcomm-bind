@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+set -uo pipefail
+
+GABOT_MAC="${GABOT_MAC:-C4:18:E9:A8:CA:D4}"
+GABOT_UUID="${GABOT_UUID:-6f0f3f9a-89e1-4b2d-9d0e-ec7e98db58b3}"
+RFCOMM_DEVICE="${RFCOMM_DEVICE:-rfcomm0}"
+POLL_INTERVAL_SECONDS="${POLL_INTERVAL_SECONDS:-3}"
+
+current_channel=""
+
+cleanup() {
+    rfcomm release "$RFCOMM_DEVICE" 2>/dev/null || true
+}
+trap cleanup EXIT INT TERM
+
+# Remove a stale one-shot binding before waiting for the Android SDP service.
+rfcomm release "$RFCOMM_DEVICE" 2>/dev/null || true
+
+discover_channel() {
+    timeout 15 sdptool browse "$GABOT_MAC" 2>/dev/null |
+        awk -v uuid="$GABOT_UUID" '
+            tolower($0) ~ uuid { found = 1 }
+            found && /Channel:/ { print $2; exit }
+        '
+}
+
+while true; do
+    channel="$(discover_channel || true)"
+    if [[ -z "$channel" ]]; then
+        if [[ -n "$current_channel" ]]; then
+            echo "GabotAppServer disappeared; waiting for SDP service"
+            current_channel=""
+        fi
+        sleep "$POLL_INTERVAL_SECONDS"
+        continue
+    fi
+
+    if [[ "$channel" != "$current_channel" || ! -e "/dev/$RFCOMM_DEVICE" ]]; then
+        rfcomm release "$RFCOMM_DEVICE" 2>/dev/null || true
+        rfcomm bind "$RFCOMM_DEVICE" "$GABOT_MAC" "$channel"
+        current_channel="$channel"
+        echo "Created /dev/$RFCOMM_DEVICE using RFCOMM channel $channel"
+    fi
+
+    sleep "$POLL_INTERVAL_SECONDS"
+done

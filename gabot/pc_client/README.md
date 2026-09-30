@@ -52,3 +52,13 @@ done
 ```
 
 If the system log is not writable, the application reports a warning and falls back to `gabot-pc-client.log` in its current working directory.
+
+## Linux RFCOMM service
+
+GabotPcClient uses a system RFCOMM device to connect to GabotApp. Install the included service on Linux with:
+
+```bash
+bash linux/install-rfcomm-service.sh
+```
+
+The service waits until GabotApp is running and publishing its Bluetooth SDP service. It creates `/dev/rfcomm0` and automatically refreshes the bind if Android assigns a different RFCOMM channel after an application or phone restart.
