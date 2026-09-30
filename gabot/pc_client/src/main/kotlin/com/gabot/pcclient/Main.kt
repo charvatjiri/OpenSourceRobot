@@ -58,7 +58,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-private const val APP_VERSION = "0.1.4"
+private const val APP_VERSION = "0.1.5"
 
 fun main() = application {
     val appState = remember { GabotPcState() }
@@ -585,17 +585,33 @@ private fun ControlSurface(
     onPress: suspend androidx.compose.foundation.gestures.PressGestureScope.() -> Unit
 ) {
     val currentOnPress by rememberUpdatedState(onPress)
+    var pressed by remember { mutableStateOf(false) }
     Surface(
         modifier = modifier
             .size(width, height)
             .pointerInput(enabled) {
                 detectTapGestures(onPress = {
-                    if (enabled) currentOnPress()
+                    if (enabled) {
+                        pressed = true
+                        try {
+                            currentOnPress()
+                        } finally {
+                            pressed = false
+                        }
+                    }
                 })
             },
         shape = MaterialTheme.shapes.medium,
-        color = if (enabled) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
-        contentColor = if (enabled) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+        color = when {
+            !enabled -> MaterialTheme.colorScheme.surfaceVariant
+            pressed -> MaterialTheme.colorScheme.primary
+            else -> MaterialTheme.colorScheme.primaryContainer
+        },
+        contentColor = when {
+            !enabled -> MaterialTheme.colorScheme.onSurfaceVariant
+            pressed -> MaterialTheme.colorScheme.onPrimary
+            else -> MaterialTheme.colorScheme.onPrimaryContainer
+        }
     ) {
         Box(contentAlignment = Alignment.Center) {
             Text(
