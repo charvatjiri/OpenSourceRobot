@@ -58,7 +58,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-private const val APP_VERSION = "0.1.3"
+private const val APP_VERSION = "0.1.4"
 
 fun main() = application {
     val appState = remember { GabotPcState() }
@@ -598,7 +598,16 @@ private fun ControlSurface(
         contentColor = if (enabled) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
     ) {
         Box(contentAlignment = Alignment.Center) {
-            Text(label, style = MaterialTheme.typography.labelLarge)
+            Text(
+                text = label,
+                style = if (label.length > 5) {
+                    MaterialTheme.typography.labelSmall
+                } else {
+                    MaterialTheme.typography.labelLarge
+                },
+                maxLines = 1,
+                softWrap = false
+            )
         }
     }
 }
