@@ -192,8 +192,8 @@ class SerialCommandExecutor(
             "shoulder vertical 0",
             "wheels fb 0",
             "wheels rl 0",
-            "grab 0",
-            "release 0"
+            "grab 1",
+            "release 1"
         )
 
         val FAIL_STOP_COMMANDS = listOf(
