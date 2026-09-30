@@ -52,13 +52,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.WindowState
 import androidx.compose.ui.window.application
+import com.gabot.shared.BinaryControlState
 import com.gabot.shared.ControllerCommands
 import com.gabot.shared.WristPosition
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-private const val APP_VERSION = "0.1.5"
+private const val APP_VERSION = "0.1.6"
 
 fun main() = application {
     val appState = remember { GabotPcState() }
@@ -379,13 +380,37 @@ private fun GrabReleaseControls(
     modifier: Modifier = Modifier,
     horizontal: Boolean = false
 ) {
+    var grabState by remember { mutableStateOf(BinaryControlState()) }
+    var releaseState by remember { mutableStateOf(BinaryControlState()) }
+
+    fun toggleGrab() {
+        val transition = grabState.toggle(ControllerCommands.GRAB_START, ControllerCommands.GRAB_STOP)
+        onCommand(transition.command)
+        grabState = transition.state
+        if (transition.state.isOn) releaseState = BinaryControlState()
+    }
+
+    fun toggleRelease() {
+        val transition = releaseState.toggle(ControllerCommands.RELEASE_START, ControllerCommands.RELEASE_STOP)
+        onCommand(transition.command)
+        releaseState = transition.state
+        if (transition.state.isOn) grabState = BinaryControlState()
+    }
+
+    LaunchedEffect(enabled) {
+        if (!enabled) {
+            grabState = BinaryControlState()
+            releaseState = BinaryControlState()
+        }
+    }
+
     if (horizontal) {
         Row(
             modifier = modifier,
             horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally)
         ) {
-            HoldCommandButton("GRAB", enabled, ControllerCommands.GRAB_START, ControllerCommands.GRAB_STOP, onCommand)
-            HoldCommandButton("RELEASE", enabled, ControllerCommands.RELEASE_START, ControllerCommands.RELEASE_STOP, onCommand)
+            ToggleCommandButton("GRAB", enabled, grabState.isOn, ::toggleGrab)
+            ToggleCommandButton("RELEASE", enabled, releaseState.isOn, ::toggleRelease)
         }
     } else {
         Column(
@@ -393,8 +418,42 @@ private fun GrabReleaseControls(
             verticalArrangement = Arrangement.spacedBy(12.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            HoldCommandButton("GRAB", enabled, ControllerCommands.GRAB_START, ControllerCommands.GRAB_STOP, onCommand)
-            HoldCommandButton("RELEASE", enabled, ControllerCommands.RELEASE_START, ControllerCommands.RELEASE_STOP, onCommand)
+            ToggleCommandButton("GRAB", enabled, grabState.isOn, ::toggleGrab)
+            ToggleCommandButton("RELEASE", enabled, releaseState.isOn, ::toggleRelease)
+        }
+    }
+}
+
+@Composable
+private fun ToggleCommandButton(
+    label: String,
+    enabled: Boolean,
+    active: Boolean,
+    onClick: () -> Unit
+) {
+    val currentOnClick by rememberUpdatedState(onClick)
+    Surface(
+        modifier = Modifier
+            .size(78.dp, 52.dp)
+            .pointerInput(enabled) {
+                detectTapGestures(onTap = {
+                    if (enabled) currentOnClick()
+                })
+            },
+        shape = MaterialTheme.shapes.medium,
+        color = when {
+            !enabled -> MaterialTheme.colorScheme.surfaceVariant
+            active -> MaterialTheme.colorScheme.primary
+            else -> MaterialTheme.colorScheme.primaryContainer
+        },
+        contentColor = when {
+            !enabled -> MaterialTheme.colorScheme.onSurfaceVariant
+            active -> MaterialTheme.colorScheme.onPrimary
+            else -> MaterialTheme.colorScheme.onPrimaryContainer
+        }
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Text(label, style = MaterialTheme.typography.labelLarge)
         }
     }
 }

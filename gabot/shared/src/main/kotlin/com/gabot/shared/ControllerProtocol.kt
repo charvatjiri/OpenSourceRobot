@@ -1,10 +1,10 @@
 package com.gabot.shared
 
 object ControllerCommands {
-    const val GRAB_START = "grab 1"
-    const val GRAB_STOP = "grab 0"
-    const val RELEASE_START = "release 1"
-    const val RELEASE_STOP = "release 0"
+    const val GRAB_START = "grab 0"
+    const val GRAB_STOP = "grab 1"
+    const val RELEASE_START = "release 0"
+    const val RELEASE_STOP = "release 1"
 
     const val ARM_UP = "shoulder vertical -50"
     const val ARM_DOWN = "shoulder vertical 30"
@@ -24,6 +24,21 @@ object ControllerCommands {
 
     fun wristVertical(position: Int): String = "wrist vertical $position"
 }
+
+data class BinaryControlState(val isOn: Boolean = false) {
+    fun toggle(onCommand: String, offCommand: String): BinaryControlTransition {
+        val nextState = copy(isOn = !isOn)
+        return BinaryControlTransition(
+            state = nextState,
+            command = if (nextState.isOn) onCommand else offCommand
+        )
+    }
+}
+
+data class BinaryControlTransition(
+    val state: BinaryControlState,
+    val command: String
+)
 
 data class WristPosition(
     val horizontal: Int = 80,
