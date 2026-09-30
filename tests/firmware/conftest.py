@@ -112,7 +112,10 @@ def _restore_command(
 ) -> None:
     position = _last_command_value(command)
     _announce(f"{phase} servo position: {command} (position {position})")
-    response = serial_session.command(command)
+    response = serial_session.command(
+        command,
+        predicate=lambda line: line == expected,
+    )
     assert response == expected
 
 
@@ -203,7 +206,10 @@ class SerialProtocolSession:
 
     def expect_command(self, text: str, expected: str, message: str) -> None:
         _announce(message)
-        response = self.command(text)
+        response = self.command(
+            text,
+            predicate=lambda line: line == expected,
+        )
         assert response == expected
 
     def set_servo_position(self, name: str, command: str, expected: str) -> None:
