@@ -775,6 +775,9 @@ private fun HoldCommandButton(
     width: androidx.compose.ui.unit.Dp = 78.dp,
     height: androidx.compose.ui.unit.Dp = 52.dp
 ) {
+    var pressed by remember { mutableStateOf(false) }
+    val currentOnCommand by rememberUpdatedState(onCommand)
+
     Surface(
         modifier = modifier
             .size(width = width, height = height)
@@ -784,22 +787,27 @@ private fun HoldCommandButton(
                         if (!enabled) {
                             return@detectTapGestures
                         }
-                        onCommand(pressCommand)
-                        tryAwaitRelease()
-                        releaseCommand?.let(onCommand)
+                        pressed = true
+                        try {
+                            currentOnCommand(pressCommand)
+                            tryAwaitRelease()
+                        } finally {
+                            pressed = false
+                            releaseCommand?.let { currentOnCommand(it) }
+                        }
                     }
                 )
             },
         shape = MaterialTheme.shapes.medium,
-        color = if (enabled) {
-            MaterialTheme.colorScheme.primaryContainer
-        } else {
-            MaterialTheme.colorScheme.surfaceVariant
+        color = when {
+            !enabled -> MaterialTheme.colorScheme.surfaceVariant
+            pressed -> MaterialTheme.colorScheme.primary
+            else -> MaterialTheme.colorScheme.primaryContainer
         },
-        contentColor = if (enabled) {
-            MaterialTheme.colorScheme.onPrimaryContainer
-        } else {
-            MaterialTheme.colorScheme.onSurfaceVariant
+        contentColor = when {
+            !enabled -> MaterialTheme.colorScheme.onSurfaceVariant
+            pressed -> MaterialTheme.colorScheme.onPrimary
+            else -> MaterialTheme.colorScheme.onPrimaryContainer
         }
     ) {
         Box(contentAlignment = Alignment.Center) {

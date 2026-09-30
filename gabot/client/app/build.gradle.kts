@@ -6,7 +6,7 @@ plugins {
 
 val majorVer = 0
 val minorVer = 1
-val microVer = 11
+val microVer = 12
 
 android {
     namespace = "com.example.gabot_client"
